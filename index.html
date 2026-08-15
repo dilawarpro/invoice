@@ -427,25 +427,15 @@
             <input type="text" id="itemName" class="form-control" list="catalogList" placeholder="e.g. Cold drink" required>
             <datalist id="catalogList"></datalist>
           </div>
-          <div class="col-4 col-sm-2">
+          <div class="col-4 col-sm-3">
             <label class="form-label">Qty</label>
-            <input type="number" id="itemQty" class="form-control" value="1" min="0.01" step="0.01" required>
+            <input type="number" id="itemQty" class="form-control" value="1" min="1" step="1" required>
           </div>
-          <div class="col-8 col-sm-2">
+          <div class="col-8 col-sm-3">
             <label class="form-label">Price</label>
             <input type="number" id="itemPrice" class="form-control" placeholder="0.00" min="0" step="0.01" required>
           </div>
-          <div class="col-7 col-sm-2">
-            <label class="form-label">Item discount</label>
-            <div class="input-group">
-              <input type="number" id="itemDiscountValue" class="form-control" placeholder="0" min="0" step="0.01">
-              <select id="itemDiscountType" class="form-select" style="max-width:62px;">
-                <option value="percent">%</option>
-                <option value="fixed">Rs</option>
-              </select>
-            </div>
-          </div>
-          <div class="col-5 col-sm-1">
+          <div class="col-12 col-sm-2">
             <button type="submit" class="btn btn-brand w-100" id="addItemBtn"><i class="bi bi-plus-lg"></i></button>
           </div>
           <div class="col-12">
@@ -1219,15 +1209,11 @@ function renderCart() {
   } else {
     emptyMsg.classList.add('d-none');
     body.innerHTML = state.cart.map((item, idx) => {
-      const discBadge = item._discountAmt > 0
-        ? `<span class="item-discount-tag">-${fmt(item._discountAmt)} discount</span>`
-        : '';
       return `
         <tr data-id="${item.id}">
           <td class="sr-col">${idx + 1}</td>
           <td>
             <div>${escapeHtml(item.name)}</div>
-            ${discBadge}
           </td>
           <td class="text-center">${item.qty}</td>
           <td class="text-end">${fmt(item.price)}</td>
@@ -1293,7 +1279,7 @@ function itemsHtmlModern(items) {
     <div class="rc-item-row">
       <div>
         <div class="rc-item-name"><span class="rc-sr">${idx + 1}.</span>${escapeHtml(it.name)}</div>
-        <div class="rc-item-sub">${it.qty} × ${fmt(it.price)}${it._discountAmt > 0 ? ' · -' + fmt(it._discountAmt) + ' off' : ''}</div>
+        <div class="rc-item-sub">${it.qty} × ${fmt(it.price)}</div>
       </div>
       <div class="fw-semibold">${fmt(it._lineTotal)}</div>
     </div>
@@ -1342,7 +1328,6 @@ function itemsHtmlTicket(items) {
       <div class="rc-item-top"><span><span class="rc-sr">${idx + 1}.</span>${escapeHtml(it.name)}</span><span>${fmt(it._lineTotal)}</span></div>
       <div class="rc-item-bottom">
         <span>${it.qty} x ${fmt(it.price)}</span>
-        <span>${it._discountAmt > 0 ? '-' + fmt(it._discountAmt) + ' disc' : ''}</span>
       </div>
     </div>
   `).join('');
@@ -1848,8 +1833,6 @@ function wireAddItemForm() {
     const name = document.getElementById('itemName').value.trim();
     const qty = parseFloat(document.getElementById('itemQty').value);
     const price = parseFloat(document.getElementById('itemPrice').value);
-    const discountType = document.getElementById('itemDiscountType').value;
-    const discountValue = parseFloat(document.getElementById('itemDiscountValue').value) || 0;
     const barcode = document.getElementById('itemBarcode').value.trim();
 
     if (!name || !(qty > 0) || isNaN(price) || price < 0) {
@@ -1857,9 +1840,12 @@ function wireAddItemForm() {
       return;
     }
 
+    // Per-item discounts have been removed — items always carry zero
+    // item-level discount now. Use "Overall adjustments" below the cart
+    // for a discount across the whole sale instead.
     state.cart.push({
       id: editingItemId || uid(),
-      name, qty, price, discountType, discountValue, barcode: barcode || ''
+      name, qty, price, discountType: 'percent', discountValue: 0, barcode: barcode || ''
     });
     editingItemId = null;
     document.getElementById('addItemBtn').innerHTML = '<i class="bi bi-plus-lg"></i>';
@@ -1869,7 +1855,6 @@ function wireAddItemForm() {
 
     e.target.reset();
     document.getElementById('itemQty').value = 1;
-    document.getElementById('itemDiscountType').value = 'percent';
     document.getElementById('itemName').focus();
 
     renderCart();
@@ -1902,8 +1887,6 @@ function wireCartActions() {
       document.getElementById('itemName').value = item.name;
       document.getElementById('itemQty').value = item.qty;
       document.getElementById('itemPrice').value = item.price;
-      document.getElementById('itemDiscountType').value = item.discountType;
-      document.getElementById('itemDiscountValue').value = item.discountValue;
       document.getElementById('itemBarcode').value = item.barcode || '';
       editingItemId = id;
       document.getElementById('addItemBtn').innerHTML = '<i class="bi bi-check2"></i>';
