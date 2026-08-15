@@ -279,6 +279,59 @@
   /* ---------- Toast ---------- */
   .toast{ font-size:.85rem; }
 
+  /* ---------- Barcode / QR scanner ---------- */
+  #scannerReader{
+    width:100%; border-radius:12px; overflow:hidden; background:#000;
+    min-height:260px;
+  }
+  #scannerReader video{ border-radius:12px; }
+  .scan-flash{
+    position:absolute; inset:0; background:rgba(31,157,85,.35);
+    opacity:0; pointer-events:none; transition:opacity .15s;
+  }
+  .scan-flash.active{ opacity:1; }
+  .scan-log-item{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:.45rem .6rem; border-radius:8px; background:var(--workspace);
+    font-size:.82rem; margin-bottom:.35rem;
+  }
+  .scan-log-item .qty-badge{
+    background:var(--accent); color:#fff; font-weight:700; border-radius:999px;
+    font-size:.7rem; padding:.05rem .5rem; margin-left:.4rem;
+  }
+  #scanUnknownBox{
+    background:var(--amber-soft); border:1px solid #f0d9a8; border-radius:12px;
+    padding:.9rem;
+  }
+
+  /* ---------- Inventory ---------- */
+  .inv-nav-btn{ position:relative; }
+  .inv-badge{
+    position:absolute; top:-6px; right:-6px; background:var(--danger); color:#fff;
+    font-size:.62rem; font-weight:700; border-radius:999px; padding:.05rem .38rem; line-height:1.3;
+  }
+  .inv-table{ font-size:.85rem; }
+  .inv-table th{
+    font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft);
+    border-bottom:1px solid var(--line); font-weight:700;
+  }
+  .inv-table td{ vertical-align:middle; }
+  .inv-row-low td{ background:var(--amber-soft); }
+  .inv-row-out td{ background:#fde9e7; }
+  .inv-stock-pill{
+    font-size:.68rem; font-weight:700; padding:.12rem .5rem; border-radius:999px; display:inline-block;
+  }
+  .inv-stock-ok{ background:#e3f6ea; color:var(--good); }
+  .inv-stock-low{ background:var(--amber-soft); color:#9c6a14; }
+  .inv-stock-out{ background:#fde9e7; color:var(--danger); }
+  .inv-stock-untracked{ background:var(--workspace); color:var(--ink-soft); }
+  #invAddForm{ background:var(--workspace); border-radius:12px; padding:.9rem; }
+  #invBulkImportBox{ background:var(--workspace); border-radius:12px; padding:.9rem; }
+  .inv-low-banner{
+    background:var(--amber-soft); border:1px solid #f0d9a8; border-radius:10px;
+    padding:.6rem .8rem; font-size:.82rem; color:#7a5410;
+  }
+
   /* ---------- Print ----------
      IMPORTANT: previously this hid everything with visibility:hidden, which
      keeps hidden elements in the page's LAYOUT (they just aren't drawn).
@@ -321,6 +374,7 @@
   <span class="brand"><i class="bi bi-receipt"></i> Dukan<span class="dot">Slip</span></span>
   <div class="d-flex align-items-center gap-2">
     <span class="bt-pill" id="btStatusPill"><span class="dot-status"></span><span id="btStatusText">Printer not connected</span></span>
+    <button class="nav-icon-btn inv-nav-btn" data-bs-toggle="modal" data-bs-target="#inventoryModal"><i class="bi bi-boxes"></i> Inventory<span class="inv-badge d-none" id="invBadge">0</span></button>
     <button class="nav-icon-btn" data-bs-toggle="modal" data-bs-target="#historyModal"><i class="bi bi-clock-history"></i> History</button>
     <button class="nav-icon-btn" data-bs-toggle="offcanvas" data-bs-target="#settingsPanel"><i class="bi bi-gear"></i> Settings</button>
   </div>
@@ -355,9 +409,14 @@
       </div>
 
       <div class="builder-card">
-        <h6><i class="bi bi-plus-circle"></i> Add item</h6>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0"><i class="bi bi-plus-circle"></i> Add item</h6>
+          <button type="button" class="btn btn-sm btn-outline-brand" id="openScannerBtn" data-bs-toggle="modal" data-bs-target="#scannerModal">
+            <i class="bi bi-upc-scan"></i> Scan barcode / QR
+          </button>
+        </div>
         <form id="addItemForm" class="row g-2 align-items-end">
-          <div class="col-12 col-sm-5">
+          <div class="col-12 col-sm-4">
             <label class="form-label">Product name</label>
             <input type="text" id="itemName" class="form-control" list="catalogList" placeholder="e.g. Cold drink" required>
             <datalist id="catalogList"></datalist>
@@ -382,6 +441,10 @@
           </div>
           <div class="col-5 col-sm-1">
             <button type="submit" class="btn btn-brand w-100" id="addItemBtn"><i class="bi bi-plus-lg"></i></button>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Barcode (optional — link this product to a scan)</label>
+            <input type="text" id="itemBarcode" class="form-control" placeholder="Scan or type a barcode to link it to this product">
           </div>
         </form>
       </div>
@@ -595,8 +658,22 @@
         <strong id="nextInvoicePreview" class="rc-mono"></strong>
       </div>
 
+      <div class="mb-3">
+        <label class="form-label">Low stock alert threshold (default)</label>
+        <input type="number" id="setLowStockThreshold" class="form-control" min="0" step="1" placeholder="5">
+        <div class="form-text">Products at or below this quantity are flagged as low stock in Inventory. Can be overridden per product.</div>
+      </div>
+
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" id="setSoundEnabled">
+        <label class="form-check-label" for="setSoundEnabled">Play a sound when an item is added</label>
+      </div>
+
       <button type="submit" class="btn btn-brand w-100"><i class="bi bi-check2"></i> Save settings</button>
       <button type="button" id="resetCounterBtn" class="btn btn-outline-secondary w-100 mt-2">Reset invoice counter to 1</button>
+
+      <hr class="my-3">
+      <p class="small rc-muted mb-0"><i class="bi bi-boxes"></i> Manage your full product list, stock levels and bulk import from the <strong>Inventory</strong> button in the top navigation bar.</p>
     </form>
   </div>
 </div>
@@ -624,6 +701,125 @@
   </div>
 </div>
 
+<!-- ============ INVENTORY MODAL ============ -->
+<div class="modal fade" id="inventoryModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title brand-font"><i class="bi bi-boxes"></i> Inventory</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+
+        <div id="invLowBanner" class="inv-low-banner d-none mb-3">
+          <i class="bi bi-exclamation-triangle"></i> <span id="invLowBannerText"></span>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+          <input type="text" id="invSearch" class="form-control" style="max-width:260px;" placeholder="Search by name or barcode...">
+          <button type="button" class="btn btn-brand btn-sm" id="invShowAddBtn"><i class="bi bi-plus-lg"></i> Add product</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="invShowImportBtn"><i class="bi bi-upload"></i> Bulk import (CSV)</button>
+          <span class="small rc-muted ms-auto" id="invCountLabel">0 products</span>
+        </div>
+
+        <form id="invAddForm" class="row g-2 mb-3 d-none">
+          <input type="hidden" id="invEditId" value="">
+          <div class="col-12"><strong class="small" id="invFormTitle">Add product</strong></div>
+          <div class="col-12 col-sm-4">
+            <label class="form-label">Product name</label>
+            <input type="text" id="invName" class="form-control form-control-sm" required>
+          </div>
+          <div class="col-6 col-sm-2">
+            <label class="form-label">Price</label>
+            <input type="number" id="invPrice" class="form-control form-control-sm" min="0" step="0.01" required>
+          </div>
+          <div class="col-6 col-sm-3">
+            <label class="form-label">Barcode (optional)</label>
+            <input type="text" id="invBarcode" class="form-control form-control-sm">
+          </div>
+          <div class="col-6 col-sm-2">
+            <label class="form-label">Stock qty</label>
+            <input type="number" id="invStock" class="form-control form-control-sm" min="0" step="1" placeholder="untracked">
+          </div>
+          <div class="col-6 col-sm-1">
+            <label class="form-label">Low at</label>
+            <input type="number" id="invLowThreshold" class="form-control form-control-sm" min="0" step="1" placeholder="—">
+          </div>
+          <div class="col-12 d-flex gap-2 mt-1">
+            <button type="submit" class="btn btn-brand btn-sm"><i class="bi bi-check2"></i> Save product</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="invCancelAddBtn">Cancel</button>
+          </div>
+        </form>
+
+        <div id="invBulkImportBox" class="mb-3 d-none">
+          <div class="small fw-semibold mb-2">Bulk import products</div>
+          <p class="small rc-muted mb-2">One product per line: <code>name,price,barcode,stock</code> — barcode and stock are optional (leave blank, e.g. <code>Cold drink,120,,50</code>). Existing products (matched by barcode, or name) will be updated.</p>
+          <input type="file" id="invCsvFile" accept=".csv,text/csv,text/plain" class="form-control form-control-sm mb-2">
+          <textarea id="invCsvText" class="form-control form-control-sm mb-2" rows="4" placeholder="Cold drink,120,8964000123,50&#10;Rice 1kg,260,,20"></textarea>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-brand btn-sm" id="invImportBtn"><i class="bi bi-upload"></i> Import</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="invCancelImportBtn">Cancel</button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table inv-table align-middle mb-0">
+            <thead>
+              <tr><th>Product</th><th>Barcode</th><th class="text-end">Price</th><th class="text-center">Stock</th><th class="text-end">Actions</th></tr>
+            </thead>
+            <tbody id="invTableBody"></tbody>
+          </table>
+        </div>
+        <p class="small rc-muted text-center mb-0" id="invEmptyMsg">No products yet — add one above or scan a barcode.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SCANNER MODAL ============ -->
+<div class="modal fade" id="scannerModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title brand-font"><i class="bi bi-upc-scan"></i> Scan to add products</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="position-relative">
+          <div id="scannerReader"></div>
+          <div class="scan-flash" id="scanFlash"></div>
+        </div>
+        <p class="small rc-muted mt-2 mb-2">
+          <i class="bi bi-info-circle"></i> Point the camera at a product's barcode or QR code. Each recognized code is added to the cart automatically — keep scanning for the next item, no need to close this window.
+        </p>
+
+        <div id="scanUnknownBox" class="d-none mb-2">
+          <div class="small fw-semibold mb-2"><i class="bi bi-question-circle"></i> New code scanned — not in your catalog yet</div>
+          <div class="rc-mono small mb-2" id="scanUnknownCode"></div>
+          <div class="row g-2">
+            <div class="col-7">
+              <input type="text" id="scanUnknownName" class="form-control form-control-sm" placeholder="Product name">
+            </div>
+            <div class="col-5">
+              <input type="number" id="scanUnknownPrice" class="form-control form-control-sm" placeholder="Price" min="0" step="0.01">
+            </div>
+          </div>
+          <div class="d-flex gap-2 mt-2">
+            <button type="button" class="btn btn-sm btn-brand flex-fill" id="scanUnknownSaveBtn"><i class="bi bi-check2"></i> Save &amp; add to cart</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="scanUnknownSkipBtn">Skip</button>
+          </div>
+        </div>
+
+        <div id="scanLog"></div>
+      </div>
+      <div class="modal-footer">
+        <span class="small rc-muted me-auto" id="scanCountLabel">0 items added this session</span>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Done scanning</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ============ TOASTS ============ -->
 <div class="toast-container position-fixed bottom-0 end-0 p-3">
   <div id="appToast" class="toast align-items-center text-bg-dark border-0" role="alert">
@@ -639,6 +835,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 'use strict';
 
@@ -657,11 +854,14 @@ const state = {
     template: 'ticket',
     paperSize: '80mm',
     btChunkSize: 20,
-    dashboardHidden: false
+    dashboardHidden: false,
+    lowStockThreshold: 5,
+    soundEnabled: true
   },
-  catalog: [],      // [{name, price}]
+  catalog: [],      // [{id, name, price, barcode, stock, lowStockThreshold}] — stock/lowStockThreshold are null/undefined for untracked items
+  _loaded: false,   // becomes true once the initial storage load completes; guards against writing over saved data before it has loaded
   history: [],      // array of saved invoice snapshots
-  cart: [],         // [{id,name,qty,price,discountType,discountValue}]
+  cart: [],         // [{id,name,qty,price,discountType,discountValue,barcode}]
   customer: '',
   note: '',
   status: 'paid',
@@ -691,6 +891,14 @@ async function storageGet(key, fallback) {
 }
 
 async function storageSet(key, value) {
+  // Guard against writing an empty/default in-memory state over data that's
+  // already saved but simply hasn't finished loading yet (e.g. a very fast
+  // interaction right at page load, or a slow network). Once loadAll() has
+  // completed once, this never blocks a real write again.
+  if (!state._loaded) {
+    console.warn('Skipped storage write for', key, '— initial load not finished yet.');
+    return;
+  }
   try {
     await window.storage.set(key, JSON.stringify(value), false);
   } catch (e) {
@@ -703,6 +911,16 @@ async function loadAll() {
   if (savedSettings) Object.assign(state.settings, savedSettings);
   state.catalog = await storageGet('catalog', []);
   state.history = await storageGet('history', []);
+
+  // Migrate any catalog entries saved before stock tracking / stable IDs
+  // existed, so nothing is lost and everything works with the new features.
+  let migrated = false;
+  state.catalog.forEach(p => {
+    if (!p.id) { p.id = uid(); migrated = true; }
+  });
+
+  state._loaded = true;
+  if (migrated) storageSet('catalog', state.catalog);
 }
 
 /* =========================================================
@@ -790,6 +1008,35 @@ function showToast(msg) {
   const toastEl = document.getElementById('appToast');
   document.getElementById('appToastBody').textContent = msg;
   bootstrap.Toast.getOrCreateInstance(toastEl, { delay: 2200 }).show();
+}
+
+/* Short synthesized "item added" chime — built with the Web Audio API so no
+   external sound file is needed and it still works offline. Respects the
+   "Play a sound when an item is added" setting. */
+let sharedAudioCtx = null;
+function playItemAddedSound() {
+  if (!state.settings.soundEnabled) return;
+  try {
+    if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
+    const ctx = sharedAudioCtx;
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.setValueAtTime(1175, now + 0.09);
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.exponentialRampToValueAtTime(0.18, now + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.24);
+  } catch (e) {
+    console.warn('Could not play sound', e);
+  }
 }
 
 /* =========================================================
@@ -1117,20 +1364,326 @@ function syncPrintRoot(receiptEl) {
 }
 
 /* =========================================================
-   CATALOG (autocomplete)
+   CATALOG (autocomplete + barcode lookup)
    ========================================================= */
 function renderCatalogDatalist() {
   const dl = document.getElementById('catalogList');
   dl.innerHTML = state.catalog.map(p => `<option value="${escapeHtml(p.name)}">`).join('');
 }
 
-function upsertCatalog(name, price) {
-  const existing = state.catalog.find(p => p.name.toLowerCase() === name.toLowerCase());
-  if (existing) existing.price = price;
-  else state.catalog.unshift({ name, price });
-  state.catalog = state.catalog.slice(0, 200);
+function findCatalogByBarcode(code) {
+  return state.catalog.find(p => p.barcode && p.barcode === code) || null;
+}
+
+function findCatalogByName(name) {
+  return state.catalog.find(p => p.name.toLowerCase() === name.toLowerCase()) || null;
+}
+
+function findCatalogById(id) {
+  return state.catalog.find(p => p.id === id) || null;
+}
+
+/* Creates or updates a catalog entry from a sale-side action (Add Item form
+   or the scanner). Matches first by barcode (if given), otherwise by name,
+   so scanning a code for an existing product (added manually) links it
+   instead of creating a duplicate entry. Stock/lowStockThreshold fields are
+   left untouched here — those are only ever set from the Inventory screen
+   or a CSV import, never implicitly reset by a sale. */
+function upsertCatalog(name, price, barcode) {
+  let existing = null;
+  if (barcode) existing = findCatalogByBarcode(barcode);
+  if (!existing) existing = findCatalogByName(name);
+
+  if (existing) {
+    existing.price = price;
+    existing.name = name;
+    if (barcode) existing.barcode = barcode;
+  } else {
+    state.catalog.unshift({ id: uid(), name, price, barcode: barcode || '', stock: null, lowStockThreshold: null });
+  }
+  state.catalog = state.catalog.slice(0, 1000);
   storageSet('catalog', state.catalog);
   renderCatalogDatalist();
+  renderInventoryTable();
+}
+
+/* Full create/update used by the Inventory "Add product" form, editing an
+   existing row, and CSV import. Matching priority: explicit id (editing) >
+   barcode > name — so importing a CSV that references a product you already
+   track updates it in place instead of duplicating it. Fields left
+   undefined in `fields` are not overwritten, so a partial update (e.g. just
+   correcting the price) never wipes out barcode/stock that's already set. */
+function upsertCatalogFull(fields) {
+  let existing = null;
+  if (fields.id) existing = findCatalogById(fields.id);
+  if (!existing && fields.barcode) existing = findCatalogByBarcode(fields.barcode);
+  if (!existing && fields.name) existing = findCatalogByName(fields.name);
+
+  if (existing) {
+    if (fields.name !== undefined) existing.name = fields.name;
+    if (fields.price !== undefined) existing.price = fields.price;
+    if (fields.barcode !== undefined) existing.barcode = fields.barcode;
+    if (fields.stock !== undefined) existing.stock = fields.stock;
+    if (fields.lowStockThreshold !== undefined) existing.lowStockThreshold = fields.lowStockThreshold;
+  } else {
+    existing = {
+      id: uid(),
+      name: fields.name || 'Unnamed product',
+      price: fields.price != null ? fields.price : 0,
+      barcode: fields.barcode || '',
+      stock: fields.stock != null ? fields.stock : null,
+      lowStockThreshold: fields.lowStockThreshold != null ? fields.lowStockThreshold : null
+    };
+    state.catalog.unshift(existing);
+  }
+  state.catalog = state.catalog.slice(0, 1000);
+  storageSet('catalog', state.catalog);
+  renderCatalogDatalist();
+  renderInventoryTable();
+  return existing;
+}
+
+/* Deduct sold quantities from tracked stock. Called only when a sale is
+   actually persisted as a NEW history entry (not when an unchanged draft is
+   re-saved), so stock is never double-deducted. Items without a matching
+   catalog entry, or catalog entries with stock left untracked (null), are
+   skipped — this is an opt-in feature per product. */
+function deductStockForSale(items) {
+  let changed = false;
+  items.forEach(it => {
+    let product = null;
+    if (it.barcode) product = findCatalogByBarcode(it.barcode);
+    if (!product) product = findCatalogByName(it.name);
+    if (product && product.stock != null) {
+      product.stock = Math.max(0, Number(product.stock) - Number(it.qty || 0));
+      changed = true;
+    }
+  });
+  if (changed) {
+    storageSet('catalog', state.catalog);
+    renderInventoryTable();
+  }
+}
+
+function lowStockThresholdFor(product) {
+  return product.lowStockThreshold != null ? Number(product.lowStockThreshold) : Number(state.settings.lowStockThreshold || 5);
+}
+
+function computeLowStockItems() {
+  return state.catalog.filter(p => p.stock != null && p.stock <= lowStockThresholdFor(p));
+}
+
+function updateInventoryBadge() {
+  const low = computeLowStockItems();
+  const badge = document.getElementById('invBadge');
+  if (!badge) return;
+  if (low.length > 0) {
+    badge.textContent = String(low.length);
+    badge.classList.remove('d-none');
+  } else {
+    badge.classList.add('d-none');
+  }
+}
+
+/* =========================================================
+   INVENTORY (full product list, stock, low-stock alerts, CSV import)
+   ========================================================= */
+function stockPillHtml(product) {
+  if (product.stock == null) return `<span class="inv-stock-pill inv-stock-untracked">untracked</span>`;
+  const threshold = lowStockThresholdFor(product);
+  if (product.stock <= 0) return `<span class="inv-stock-pill inv-stock-out">${product.stock} · out of stock</span>`;
+  if (product.stock <= threshold) return `<span class="inv-stock-pill inv-stock-low">${product.stock} · low</span>`;
+  return `<span class="inv-stock-pill inv-stock-ok">${product.stock}</span>`;
+}
+
+function renderInventoryTable() {
+  const body = document.getElementById('invTableBody');
+  const emptyMsg = document.getElementById('invEmptyMsg');
+  const countLabel = document.getElementById('invCountLabel');
+  if (!body) return;
+
+  const query = (document.getElementById('invSearch').value || '').trim().toLowerCase();
+  const rows = state.catalog.filter(p =>
+    !query || p.name.toLowerCase().includes(query) || (p.barcode || '').toLowerCase().includes(query)
+  );
+
+  countLabel.textContent = state.catalog.length + (state.catalog.length === 1 ? ' product' : ' products');
+
+  if (rows.length === 0) {
+    body.innerHTML = '';
+    emptyMsg.classList.remove('d-none');
+  } else {
+    emptyMsg.classList.add('d-none');
+    body.innerHTML = rows.map(p => {
+      const threshold = lowStockThresholdFor(p);
+      let rowClass = '';
+      if (p.stock != null) {
+        if (p.stock <= 0) rowClass = 'inv-row-out';
+        else if (p.stock <= threshold) rowClass = 'inv-row-low';
+      }
+      return `
+        <tr class="${rowClass}" data-id="${p.id}">
+          <td>${escapeHtml(p.name)}</td>
+          <td class="rc-mono small">${escapeHtml(p.barcode || '—')}</td>
+          <td class="text-end">${fmt(p.price)}</td>
+          <td class="text-center">${stockPillHtml(p)}</td>
+          <td class="text-end">
+            <button class="row-action-btn inv-edit-btn" title="Edit" data-id="${p.id}"><i class="bi bi-pencil"></i></button>
+            <button class="row-action-btn danger inv-delete-btn" title="Delete" data-id="${p.id}"><i class="bi bi-trash"></i></button>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  const low = computeLowStockItems();
+  const banner = document.getElementById('invLowBanner');
+  if (low.length > 0) {
+    banner.classList.remove('d-none');
+    document.getElementById('invLowBannerText').textContent =
+      low.length + ' product' + (low.length === 1 ? '' : 's') + ' running low: ' +
+      low.slice(0, 6).map(p => p.name).join(', ') + (low.length > 6 ? '…' : '');
+  } else {
+    banner.classList.add('d-none');
+  }
+
+  updateInventoryBadge();
+}
+
+function showInvAddForm(editProduct) {
+  document.getElementById('invBulkImportBox').classList.add('d-none');
+  const form = document.getElementById('invAddForm');
+  form.classList.remove('d-none');
+  if (editProduct) {
+    document.getElementById('invFormTitle').textContent = 'Edit product';
+    document.getElementById('invEditId').value = editProduct.id;
+    document.getElementById('invName').value = editProduct.name;
+    document.getElementById('invPrice').value = editProduct.price;
+    document.getElementById('invBarcode').value = editProduct.barcode || '';
+    document.getElementById('invStock').value = editProduct.stock != null ? editProduct.stock : '';
+    document.getElementById('invLowThreshold').value = editProduct.lowStockThreshold != null ? editProduct.lowStockThreshold : '';
+  } else {
+    document.getElementById('invFormTitle').textContent = 'Add product';
+    document.getElementById('invEditId').value = '';
+    document.getElementById('invName').value = '';
+    document.getElementById('invPrice').value = '';
+    document.getElementById('invBarcode').value = '';
+    document.getElementById('invStock').value = '';
+    document.getElementById('invLowThreshold').value = '';
+  }
+  document.getElementById('invName').focus();
+}
+
+function hideInvAddForm() {
+  document.getElementById('invAddForm').classList.add('d-none');
+}
+
+/* Accepts lines of `name,price,barcode,stock` (barcode/stock optional).
+   Returns { imported, skipped }. */
+function importCsvText(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  let imported = 0, skipped = 0;
+  lines.forEach(line => {
+    // Skip an obvious header row like "name,price,barcode,stock"
+    if (/^name\s*,\s*price/i.test(line)) return;
+    const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+    const name = cols[0] || '';
+    const price = parseFloat(cols[1]);
+    const barcode = cols[2] || '';
+    const stockRaw = cols[3];
+    const stock = stockRaw !== undefined && stockRaw !== '' && !isNaN(parseFloat(stockRaw)) ? parseFloat(stockRaw) : null;
+
+    if (!name || isNaN(price) || price < 0) { skipped++; return; }
+    upsertCatalogFull({ name, price, barcode, stock });
+    imported++;
+  });
+  return { imported, skipped };
+}
+
+function wireInventoryModal() {
+  const modalEl = document.getElementById('inventoryModal');
+  modalEl.addEventListener('show.bs.modal', () => {
+    hideInvAddForm();
+    document.getElementById('invBulkImportBox').classList.add('d-none');
+    renderInventoryTable();
+  });
+
+  document.getElementById('invSearch').addEventListener('input', renderInventoryTable);
+
+  document.getElementById('invShowAddBtn').addEventListener('click', () => showInvAddForm(null));
+  document.getElementById('invCancelAddBtn').addEventListener('click', hideInvAddForm);
+
+  document.getElementById('invShowImportBtn').addEventListener('click', () => {
+    hideInvAddForm();
+    document.getElementById('invBulkImportBox').classList.remove('d-none');
+  });
+  document.getElementById('invCancelImportBtn').addEventListener('click', () => {
+    document.getElementById('invBulkImportBox').classList.add('d-none');
+  });
+
+  document.getElementById('invAddForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const id = document.getElementById('invEditId').value || null;
+    const name = document.getElementById('invName').value.trim();
+    const price = parseFloat(document.getElementById('invPrice').value);
+    const barcode = document.getElementById('invBarcode').value.trim();
+    const stockVal = document.getElementById('invStock').value;
+    const stock = stockVal === '' ? null : parseFloat(stockVal);
+    const thresholdVal = document.getElementById('invLowThreshold').value;
+    const lowStockThreshold = thresholdVal === '' ? null : parseFloat(thresholdVal);
+
+    if (!name || isNaN(price) || price < 0) {
+      showToast('Enter a valid product name and price.');
+      return;
+    }
+
+    upsertCatalogFull({ id, name, price, barcode, stock, lowStockThreshold });
+    hideInvAddForm();
+    showToast(id ? 'Product updated.' : 'Product added.');
+  });
+
+  document.getElementById('invTableBody').addEventListener('click', e => {
+    const editBtn = e.target.closest('.inv-edit-btn');
+    const delBtn = e.target.closest('.inv-delete-btn');
+
+    if (editBtn) {
+      const product = findCatalogById(editBtn.dataset.id);
+      if (product) showInvAddForm(product);
+    }
+    if (delBtn) {
+      const product = findCatalogById(delBtn.dataset.id);
+      if (!product) return;
+      if (!confirm(`Delete "${product.name}" from inventory? This won't affect past invoices.`)) return;
+      state.catalog = state.catalog.filter(p => p.id !== product.id);
+      storageSet('catalog', state.catalog);
+      renderCatalogDatalist();
+      renderInventoryTable();
+      showToast('Product deleted.');
+    }
+  });
+
+  document.getElementById('invImportBtn').addEventListener('click', () => {
+    const text = document.getElementById('invCsvText').value;
+    if (!text.trim()) {
+      showToast('Paste CSV text or choose a file first.');
+      return;
+    }
+    const { imported, skipped } = importCsvText(text);
+    showToast(`Imported ${imported} product${imported === 1 ? '' : 's'}${skipped ? `, skipped ${skipped} invalid row${skipped === 1 ? '' : 's'}` : ''}.`);
+    document.getElementById('invCsvText').value = '';
+    document.getElementById('invBulkImportBox').classList.add('d-none');
+    renderInventoryTable();
+  });
+
+  document.getElementById('invCsvFile').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      document.getElementById('invCsvText').value = String(reader.result || '');
+    };
+    reader.onerror = () => showToast('Could not read that file.');
+    reader.readAsText(file);
+  });
 }
 
 /* =========================================================
@@ -1170,6 +1723,7 @@ function wireAddItemForm() {
     const price = parseFloat(document.getElementById('itemPrice').value);
     const discountType = document.getElementById('itemDiscountType').value;
     const discountValue = parseFloat(document.getElementById('itemDiscountValue').value) || 0;
+    const barcode = document.getElementById('itemBarcode').value.trim();
 
     if (!name || !(qty > 0) || isNaN(price) || price < 0) {
       showToast('Please enter a valid item name, quantity and price.');
@@ -1178,12 +1732,13 @@ function wireAddItemForm() {
 
     state.cart.push({
       id: editingItemId || uid(),
-      name, qty, price, discountType, discountValue
+      name, qty, price, discountType, discountValue, barcode: barcode || ''
     });
     editingItemId = null;
     document.getElementById('addItemBtn').innerHTML = '<i class="bi bi-plus-lg"></i>';
 
-    upsertCatalog(name, price);
+    upsertCatalog(name, price, barcode);
+    playItemAddedSound();
 
     e.target.reset();
     document.getElementById('itemQty').value = 1;
@@ -1194,8 +1749,11 @@ function wireAddItemForm() {
   });
 
   document.getElementById('itemName').addEventListener('input', e => {
-    const match = state.catalog.find(p => p.name.toLowerCase() === e.target.value.trim().toLowerCase());
-    if (match) document.getElementById('itemPrice').value = match.price;
+    const match = findCatalogByName(e.target.value.trim());
+    if (match) {
+      document.getElementById('itemPrice').value = match.price;
+      document.getElementById('itemBarcode').value = match.barcode || '';
+    }
   });
 }
 
@@ -1219,6 +1777,7 @@ function wireCartActions() {
       document.getElementById('itemPrice').value = item.price;
       document.getElementById('itemDiscountType').value = item.discountType;
       document.getElementById('itemDiscountValue').value = item.discountValue;
+      document.getElementById('itemBarcode').value = item.barcode || '';
       editingItemId = id;
       document.getElementById('addItemBtn').innerHTML = '<i class="bi bi-check2"></i>';
       state.cart = state.cart.filter(it => it.id !== id);
@@ -1343,6 +1902,11 @@ async function persistCurrentInvoice(opts) {
   state.history.unshift(snapshot);
   state.history = state.history.slice(0, 200);
   await storageSet('history', state.history);
+
+  // Deduct sold quantities from tracked stock — only happens here, right
+  // when a sale is newly recorded to history, so re-printing/re-sharing the
+  // same unmodified sale never deducts twice.
+  deductStockForSale(snapshot.items);
 
   state.settings.counter = (state.settings.counter || 1) + 1;
   await storageSet('settings', state.settings);
@@ -1545,9 +2109,12 @@ function wireSettingsForm() {
     state.settings.prefix = document.getElementById('setPrefix').value.trim() || 'INV';
     state.settings.currency = document.getElementById('setCurrency').value.trim() || 'Rs';
     state.settings.btChunkSize = parseInt(document.getElementById('setBtChunkSize').value, 10) || 20;
+    state.settings.lowStockThreshold = parseFloat(document.getElementById('setLowStockThreshold').value) || 0;
+    state.settings.soundEnabled = document.getElementById('setSoundEnabled').checked;
     await storageSet('settings', state.settings);
     document.getElementById('nextInvoicePreview').textContent = currentDraftNumber();
     renderPreview();
+    renderInventoryTable();
     showToast('Settings saved.');
   });
 
@@ -1567,12 +2134,177 @@ function fillSettingsForm() {
   document.getElementById('setPrefix').value = state.settings.prefix;
   document.getElementById('setCurrency').value = state.settings.currency;
   document.getElementById('setBtChunkSize').value = String(state.settings.btChunkSize || 20);
+  document.getElementById('setLowStockThreshold').value = state.settings.lowStockThreshold != null ? state.settings.lowStockThreshold : 5;
+  document.getElementById('setSoundEnabled').checked = state.settings.soundEnabled !== false;
   document.getElementById('nextInvoicePreview').textContent = currentDraftNumber();
 
   document.getElementById('paperSize').value = state.settings.paperSize;
   document.querySelectorAll('.tmpl-tab').forEach(t => {
     t.classList.toggle('active', t.dataset.tmpl === state.settings.template);
   });
+}
+
+/* =========================================================
+   BARCODE / QR SCANNER (continuous scan-to-cart)
+
+   Uses the html5-qrcode library (camera-based, works in Chrome/Edge/
+   Safari on both Android and iPhone — unlike the native BarcodeDetector
+   API, which iOS does not support). Every recognized code is looked up
+   in the product catalog by its linked barcode:
+     - Known code  -> instantly added to the cart (or its qty bumped by 1
+                       if that exact barcode is already in the cart), and
+                       scanning KEEPS RUNNING for the next product.
+     - Unknown code -> scanning pauses just long enough for a 2-field
+                       "name + price" mini form, which links the code to
+                       a new catalog entry and adds it to the cart, then
+                       scanning resumes automatically.
+   A short per-code cooldown prevents the same barcode from being added
+   twice if it stays in frame for a moment.
+   ========================================================= */
+let qrScanner = null;
+let scanSessionCount = 0;
+let scanCooldown = new Map(); // code -> timestamp of last accepted scan
+const SCAN_COOLDOWN_MS = 1800;
+let scannerPausedForUnknown = false;
+let pendingUnknownCode = null;
+
+function prependScanLog(text, qtyLabel) {
+  const log = document.getElementById('scanLog');
+  const row = document.createElement('div');
+  row.className = 'scan-log-item';
+  row.innerHTML = `<span><i class="bi bi-check-circle text-success"></i> ${escapeHtml(text)}</span>${qtyLabel ? `<span class="qty-badge">${escapeHtml(qtyLabel)}</span>` : ''}`;
+  log.prepend(row);
+  while (log.children.length > 12) log.removeChild(log.lastChild);
+}
+
+function flashScanner() {
+  const flash = document.getElementById('scanFlash');
+  flash.classList.add('active');
+  setTimeout(() => flash.classList.remove('active'), 150);
+}
+
+function addScannedProductToCart(product) {
+  // If this exact barcode is already the most recent matching line in the
+  // cart, bump its quantity instead of adding a duplicate row.
+  const existingLine = state.cart.find(it => it.barcode && it.barcode === product.barcode);
+  if (existingLine) {
+    existingLine.qty = Number(existingLine.qty) + 1;
+    prependScanLog(product.name, 'x' + existingLine.qty);
+  } else {
+    state.cart.push({
+      id: uid(),
+      name: product.name,
+      qty: 1,
+      price: product.price,
+      discountType: 'percent',
+      discountValue: 0,
+      barcode: product.barcode
+    });
+    prependScanLog(product.name, 'x1');
+  }
+  scanSessionCount++;
+  document.getElementById('scanCountLabel').textContent = scanSessionCount + ' items added this session';
+  playItemAddedSound();
+  renderCart();
+}
+
+function handleScannedCode(code) {
+  if (scannerPausedForUnknown) return; // ignore new scans while the unknown-item form is open
+
+  const last = scanCooldown.get(code) || 0;
+  if (Date.now() - last < SCAN_COOLDOWN_MS) return; // debounce repeated frames of the same code
+  scanCooldown.set(code, Date.now());
+
+  flashScanner();
+
+  const product = findCatalogByBarcode(code);
+  if (product) {
+    addScannedProductToCart(product);
+  } else {
+    // Pause and ask what this new code is — scanning resumes after save/skip.
+    scannerPausedForUnknown = true;
+    pendingUnknownCode = code;
+    document.getElementById('scanUnknownCode').textContent = code;
+    document.getElementById('scanUnknownName').value = '';
+    document.getElementById('scanUnknownPrice').value = '';
+    document.getElementById('scanUnknownBox').classList.remove('d-none');
+    document.getElementById('scanUnknownName').focus();
+  }
+}
+
+function wireUnknownScanForm() {
+  document.getElementById('scanUnknownSaveBtn').addEventListener('click', () => {
+    const name = document.getElementById('scanUnknownName').value.trim();
+    const price = parseFloat(document.getElementById('scanUnknownPrice').value);
+    if (!name || isNaN(price) || price < 0) {
+      showToast('Enter a product name and a valid price.');
+      return;
+    }
+    upsertCatalog(name, price, pendingUnknownCode);
+    addScannedProductToCart({ name, price, barcode: pendingUnknownCode });
+    closeUnknownScanBox();
+  });
+
+  document.getElementById('scanUnknownSkipBtn').addEventListener('click', () => {
+    closeUnknownScanBox();
+  });
+}
+
+function closeUnknownScanBox() {
+  document.getElementById('scanUnknownBox').classList.add('d-none');
+  scannerPausedForUnknown = false;
+  pendingUnknownCode = null;
+}
+
+function startScanner() {
+  if (typeof Html5Qrcode === 'undefined') {
+    showToast('Scanner library failed to load — check your internet connection.');
+    return;
+  }
+  scanSessionCount = 0;
+  scanCooldown.clear();
+  document.getElementById('scanLog').innerHTML = '';
+  document.getElementById('scanCountLabel').textContent = '0 items added this session';
+  closeUnknownScanBox();
+
+  qrScanner = new Html5Qrcode('scannerReader', {
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.QR_CODE,
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.ITF
+    ],
+    verbose: false
+  });
+
+  qrScanner.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: { width: 250, height: 180 } },
+    decodedText => handleScannedCode(decodedText.trim()),
+    () => { /* per-frame "not found" noise — ignored intentionally */ }
+  ).catch(err => {
+    console.error(err);
+    showToast('Could not access camera. Check camera permission for this site.');
+  });
+}
+
+function stopScanner() {
+  if (qrScanner) {
+    qrScanner.stop().then(() => qrScanner.clear()).catch(() => {});
+    qrScanner = null;
+  }
+  closeUnknownScanBox();
+}
+
+function wireScannerModal() {
+  const modalEl = document.getElementById('scannerModal');
+  modalEl.addEventListener('shown.bs.modal', startScanner);
+  modalEl.addEventListener('hidden.bs.modal', stopScanner);
+  wireUnknownScanForm();
 }
 
 /* =========================================================
@@ -1803,6 +2535,7 @@ async function init() {
   renderHistory();
   renderDashboard();
   applyDashboardVisibility();
+  renderInventoryTable();
   renderCart(); // also triggers renderPreview()
 
   wireAddItemForm();
@@ -1815,6 +2548,8 @@ async function init() {
   wireSettingsForm();
   wireBluetooth();
   wireDashboardToggle();
+  wireScannerModal();
+  wireInventoryModal();
 
   // Keep daily/weekly/monthly totals current even if the app is left open
   // across a midnight/week/month rollover without a new sale being saved.
