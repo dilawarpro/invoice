@@ -303,6 +303,12 @@
     background:var(--amber-soft); border:1px solid #f0d9a8; border-radius:12px;
     padding:.9rem;
   }
+  .torch-toggle-btn{
+    position:absolute; top:10px; right:10px; z-index:5;
+    background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.25); color:#fff;
+    border-radius:10px; padding:.35rem .6rem; font-size:.8rem;
+  }
+  .torch-toggle-btn.active{ background:var(--amber); border-color:var(--amber); color:#1f2530; }
 
   /* ---------- Inventory ---------- */
   .inv-nav-btn{ position:relative; }
@@ -373,7 +379,7 @@
 <nav class="app-navbar d-flex align-items-center justify-content-between flex-wrap gap-2">
   <span class="brand"><i class="bi bi-receipt"></i> Dukan<span class="dot">Slip</span></span>
   <div class="d-flex align-items-center gap-2">
-    <span class="bt-pill" id="btStatusPill"><span class="dot-status"></span><span id="btStatusText">Printer not connected</span></span>
+    <span class="bt-pill d-none" id="btStatusPill"><span class="dot-status"></span><span id="btStatusText">Printer not connected</span></span>
     <button class="nav-icon-btn inv-nav-btn" data-bs-toggle="modal" data-bs-target="#inventoryModal"><i class="bi bi-boxes"></i> Inventory<span class="inv-badge d-none" id="invBadge">0</span></button>
     <button class="nav-icon-btn" data-bs-toggle="modal" data-bs-target="#historyModal"><i class="bi bi-clock-history"></i> History</button>
     <button class="nav-icon-btn" data-bs-toggle="offcanvas" data-bs-target="#settingsPanel"><i class="bi bi-gear"></i> Settings</button>
@@ -788,9 +794,10 @@
         <div class="position-relative">
           <div id="scannerReader"></div>
           <div class="scan-flash" id="scanFlash"></div>
+          <button type="button" class="torch-toggle-btn d-none" id="torchToggleBtn"><i class="bi bi-flashlight"></i> Flash</button>
         </div>
         <p class="small rc-muted mt-2 mb-2">
-          <i class="bi bi-info-circle"></i> Point the camera at a product's barcode or QR code. Each recognized code is added to the cart automatically — keep scanning for the next item, no need to close this window.
+          <i class="bi bi-info-circle"></i> Point the camera at a product's barcode or QR code. Each recognized code is added to the cart automatically — keep scanning for the next item, no need to close this window. If it's dark, tap <strong>Flash</strong> to turn on the torch.
         </p>
 
         <div id="scanUnknownBox" class="d-none mb-2">
@@ -870,7 +877,8 @@ const state = {
   amountReceived: 0,
   viewingHistoryId: null, // when set, preview shows a saved invoice instead of the live cart
   currentSavedId: null,   // history id the live draft was last auto/manually saved as
-  currentSavedKey: null   // snapshot fingerprint at the time of that save, to avoid duplicate entries
+  currentSavedKey: null,  // snapshot fingerprint at the time of that save, to avoid duplicate entries
+  pendingWrites: 0        // number of storage writes currently in flight (used to warn before an unload could lose data)
 };
 
 let editingItemId = null;
@@ -886,24 +894,80 @@ async function storageGet(key, fallback) {
     if (res && typeof res.value === 'string') return JSON.parse(res.value);
     return fallback;
   } catch (e) {
+    // A brand-new key throws instead of returning null (per the storage
+    // API), so this is the expected path on first-ever run. Any other
+    // failure (offline, storage backend hiccup) also lands here — we still
+    // return the fallback so the app keeps working, but we log it so it's
+    // visible in devtools instead of silently vanishing.
+    console.warn('Storage read failed for', key, e);
     return fallback;
   }
 }
 
+/**
+ * Writes a key to persistent storage and RETURNS THE PROMISE so callers can
+ * await it. Earlier versions of this app fired storageSet() without
+ * awaiting it from most event handlers — if the tab was closed or refreshed
+ * a moment later, the in-flight write could be abandoned and the change
+ * silently lost. Every call site below now awaits this.
+ */
 async function storageSet(key, value) {
-  // Guard against writing an empty/default in-memory state over data that's
-  // already saved but simply hasn't finished loading yet (e.g. a very fast
-  // interaction right at page load, or a slow network). Once loadAll() has
-  // completed once, this never blocks a real write again.
   if (!state._loaded) {
     console.warn('Skipped storage write for', key, '— initial load not finished yet.');
-    return;
+    return false;
   }
+  state.pendingWrites++;
+  updateSaveIndicator();
   try {
-    await window.storage.set(key, JSON.stringify(value), false);
+    const result = await window.storage.set(key, JSON.stringify(value), false);
+    if (!result) {
+      console.error('Storage write returned no result for', key);
+      showToast('Could not save changes — please check your connection.');
+      return false;
+    }
+    return true;
   } catch (e) {
     console.error('Storage write failed for', key, e);
+    showToast('Could not save changes — please check your connection.');
+    return false;
+  } finally {
+    state.pendingWrites = Math.max(0, state.pendingWrites - 1);
+    updateSaveIndicator();
   }
+}
+
+function updateSaveIndicator() {
+  // Warn the user (via the browser's native "leave site?" prompt) if they
+  // try to close/refresh while a save is still in flight, instead of
+  // silently losing that change.
+  window.onbeforeunload = state.pendingWrites > 0
+    ? (e) => { e.preventDefault(); e.returnValue = ''; return ''; }
+    : null;
+}
+
+/* ---- Normalization helpers used everywhere we match products, so the
+   same physical item is always recognized as the same catalog entry ---- */
+function normalizeName(name) {
+  return String(name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/* Normalizes a scanned/typed barcode for COMPARISON purposes only (the raw,
+   as-scanned value is still what gets stored/displayed). This fixes two
+   real-world causes of "the same item gets treated as a new product":
+     1. Stray whitespace from OCR/typed entry.
+     2. UPC-A codes (12 digits) vs the same product's EAN-13 form (13
+        digits, one leading zero) — many scanners/libraries flip between
+        these for the same physical barcode depending on lighting/angle.
+        Stripping leading zeros from purely-numeric codes makes both forms
+        compare equal. */
+function normalizeBarcode(code) {
+  const trimmed = String(code || '').trim();
+  if (!trimmed) return '';
+  if (/^\d+$/.test(trimmed)) {
+    const stripped = trimmed.replace(/^0+/, '');
+    return stripped || '0';
+  }
+  return trimmed.toLowerCase();
 }
 
 async function loadAll() {
@@ -919,8 +983,45 @@ async function loadAll() {
     if (!p.id) { p.id = uid(); migrated = true; }
   });
 
+  // One-time cleanup: merge any catalog rows that are really the same
+  // product (same normalized barcode, or same normalized name) but ended
+  // up duplicated by an earlier bug. Keeps the earliest entry, preferring
+  // whichever copy has a real barcode and the higher tracked stock count.
+  const deduped = dedupeCatalog(state.catalog);
+  if (deduped.changed) {
+    state.catalog = deduped.catalog;
+    migrated = true;
+  }
+
   state._loaded = true;
   if (migrated) storageSet('catalog', state.catalog);
+}
+
+function dedupeCatalog(catalog) {
+  const byKey = new Map(); // normalized barcode OR normalized name -> catalog entry
+  const result = [];
+  let changed = false;
+
+  catalog.forEach(p => {
+    const barcodeKey = p.barcode ? 'b:' + normalizeBarcode(p.barcode) : null;
+    const nameKey = 'n:' + normalizeName(p.name);
+    const existing = (barcodeKey && byKey.get(barcodeKey)) || byKey.get(nameKey);
+
+    if (existing) {
+      changed = true;
+      // Prefer keeping a real barcode and the larger tracked stock value.
+      if (!existing.barcode && p.barcode) existing.barcode = p.barcode;
+      if (existing.stock == null && p.stock != null) existing.stock = p.stock;
+      else if (existing.stock != null && p.stock != null) existing.stock = Math.max(existing.stock, p.stock);
+      if (existing.lowStockThreshold == null && p.lowStockThreshold != null) existing.lowStockThreshold = p.lowStockThreshold;
+    } else {
+      result.push(p);
+      byKey.set(nameKey, p);
+      if (barcodeKey) byKey.set(barcodeKey, p);
+    }
+  });
+
+  return { catalog: result, changed };
 }
 
 /* =========================================================
@@ -1365,6 +1466,13 @@ function syncPrintRoot(receiptEl) {
 
 /* =========================================================
    CATALOG (autocomplete + barcode lookup)
+
+   All lookups below match on NORMALIZED name/barcode (see normalizeName /
+   normalizeBarcode above) rather than the raw stored text. This is what
+   makes rescanning the same physical barcode — or re-typing the same
+   product name with different spacing/case — recognize the existing
+   catalog entry instead of quietly creating a duplicate with what looks
+   like a "new" barcode.
    ========================================================= */
 function renderCatalogDatalist() {
   const dl = document.getElementById('catalogList');
@@ -1372,11 +1480,15 @@ function renderCatalogDatalist() {
 }
 
 function findCatalogByBarcode(code) {
-  return state.catalog.find(p => p.barcode && p.barcode === code) || null;
+  const key = normalizeBarcode(code);
+  if (!key) return null;
+  return state.catalog.find(p => p.barcode && normalizeBarcode(p.barcode) === key) || null;
 }
 
 function findCatalogByName(name) {
-  return state.catalog.find(p => p.name.toLowerCase() === name.toLowerCase()) || null;
+  const key = normalizeName(name);
+  if (!key) return null;
+  return state.catalog.find(p => normalizeName(p.name) === key) || null;
 }
 
 function findCatalogById(id) {
@@ -1389,20 +1501,23 @@ function findCatalogById(id) {
    instead of creating a duplicate entry. Stock/lowStockThreshold fields are
    left untouched here — those are only ever set from the Inventory screen
    or a CSV import, never implicitly reset by a sale. */
-function upsertCatalog(name, price, barcode) {
+async function upsertCatalog(name, price, barcode) {
   let existing = null;
   if (barcode) existing = findCatalogByBarcode(barcode);
   if (!existing) existing = findCatalogByName(name);
 
   if (existing) {
     existing.price = price;
+    // Keep the name as typed most recently, but never lose a real barcode
+    // that's already linked just because this particular sale left the
+    // barcode field blank.
     existing.name = name;
     if (barcode) existing.barcode = barcode;
   } else {
     state.catalog.unshift({ id: uid(), name, price, barcode: barcode || '', stock: null, lowStockThreshold: null });
   }
   state.catalog = state.catalog.slice(0, 1000);
-  storageSet('catalog', state.catalog);
+  await storageSet('catalog', state.catalog);
   renderCatalogDatalist();
   renderInventoryTable();
 }
@@ -1413,7 +1528,7 @@ function upsertCatalog(name, price, barcode) {
    track updates it in place instead of duplicating it. Fields left
    undefined in `fields` are not overwritten, so a partial update (e.g. just
    correcting the price) never wipes out barcode/stock that's already set. */
-function upsertCatalogFull(fields) {
+async function upsertCatalogFull(fields) {
   let existing = null;
   if (fields.id) existing = findCatalogById(fields.id);
   if (!existing && fields.barcode) existing = findCatalogByBarcode(fields.barcode);
@@ -1422,7 +1537,7 @@ function upsertCatalogFull(fields) {
   if (existing) {
     if (fields.name !== undefined) existing.name = fields.name;
     if (fields.price !== undefined) existing.price = fields.price;
-    if (fields.barcode !== undefined) existing.barcode = fields.barcode;
+    if (fields.barcode !== undefined && fields.barcode !== '') existing.barcode = fields.barcode;
     if (fields.stock !== undefined) existing.stock = fields.stock;
     if (fields.lowStockThreshold !== undefined) existing.lowStockThreshold = fields.lowStockThreshold;
   } else {
@@ -1437,7 +1552,7 @@ function upsertCatalogFull(fields) {
     state.catalog.unshift(existing);
   }
   state.catalog = state.catalog.slice(0, 1000);
-  storageSet('catalog', state.catalog);
+  await storageSet('catalog', state.catalog);
   renderCatalogDatalist();
   renderInventoryTable();
   return existing;
@@ -1448,7 +1563,7 @@ function upsertCatalogFull(fields) {
    re-saved), so stock is never double-deducted. Items without a matching
    catalog entry, or catalog entries with stock left untracked (null), are
    skipped — this is an opt-in feature per product. */
-function deductStockForSale(items) {
+async function deductStockForSale(items) {
   let changed = false;
   items.forEach(it => {
     let product = null;
@@ -1460,7 +1575,7 @@ function deductStockForSale(items) {
     }
   });
   if (changed) {
-    storageSet('catalog', state.catalog);
+    await storageSet('catalog', state.catalog);
     renderInventoryTable();
   }
 }
@@ -1579,12 +1694,12 @@ function hideInvAddForm() {
 
 /* Accepts lines of `name,price,barcode,stock` (barcode/stock optional).
    Returns { imported, skipped }. */
-function importCsvText(text) {
+async function importCsvText(text) {
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   let imported = 0, skipped = 0;
-  lines.forEach(line => {
+  for (const line of lines) {
     // Skip an obvious header row like "name,price,barcode,stock"
-    if (/^name\s*,\s*price/i.test(line)) return;
+    if (/^name\s*,\s*price/i.test(line)) continue;
     const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
     const name = cols[0] || '';
     const price = parseFloat(cols[1]);
@@ -1592,10 +1707,10 @@ function importCsvText(text) {
     const stockRaw = cols[3];
     const stock = stockRaw !== undefined && stockRaw !== '' && !isNaN(parseFloat(stockRaw)) ? parseFloat(stockRaw) : null;
 
-    if (!name || isNaN(price) || price < 0) { skipped++; return; }
-    upsertCatalogFull({ name, price, barcode, stock });
+    if (!name || isNaN(price) || price < 0) { skipped++; continue; }
+    await upsertCatalogFull({ name, price, barcode, stock });
     imported++;
-  });
+  }
   return { imported, skipped };
 }
 
@@ -1620,7 +1735,7 @@ function wireInventoryModal() {
     document.getElementById('invBulkImportBox').classList.add('d-none');
   });
 
-  document.getElementById('invAddForm').addEventListener('submit', e => {
+  document.getElementById('invAddForm').addEventListener('submit', async e => {
     e.preventDefault();
     const id = document.getElementById('invEditId').value || null;
     const name = document.getElementById('invName').value.trim();
@@ -1636,12 +1751,24 @@ function wireInventoryModal() {
       return;
     }
 
-    upsertCatalogFull({ id, name, price, barcode, stock, lowStockThreshold });
+    // Guard against creating a duplicate row when editing (id set) but the
+    // typed name/barcode now collides with a *different* existing product.
+    if (!id) {
+      const dupe = (barcode && findCatalogByBarcode(barcode)) || findCatalogByName(name);
+      if (dupe) {
+        await upsertCatalogFull({ id: dupe.id, name, price, barcode, stock, lowStockThreshold });
+        hideInvAddForm();
+        showToast('Matched an existing product — updated it instead of creating a duplicate.');
+        return;
+      }
+    }
+
+    await upsertCatalogFull({ id, name, price, barcode, stock, lowStockThreshold });
     hideInvAddForm();
     showToast(id ? 'Product updated.' : 'Product added.');
   });
 
-  document.getElementById('invTableBody').addEventListener('click', e => {
+  document.getElementById('invTableBody').addEventListener('click', async e => {
     const editBtn = e.target.closest('.inv-edit-btn');
     const delBtn = e.target.closest('.inv-delete-btn');
 
@@ -1654,20 +1781,20 @@ function wireInventoryModal() {
       if (!product) return;
       if (!confirm(`Delete "${product.name}" from inventory? This won't affect past invoices.`)) return;
       state.catalog = state.catalog.filter(p => p.id !== product.id);
-      storageSet('catalog', state.catalog);
+      await storageSet('catalog', state.catalog);
       renderCatalogDatalist();
       renderInventoryTable();
       showToast('Product deleted.');
     }
   });
 
-  document.getElementById('invImportBtn').addEventListener('click', () => {
+  document.getElementById('invImportBtn').addEventListener('click', async () => {
     const text = document.getElementById('invCsvText').value;
     if (!text.trim()) {
       showToast('Paste CSV text or choose a file first.');
       return;
     }
-    const { imported, skipped } = importCsvText(text);
+    const { imported, skipped } = await importCsvText(text);
     showToast(`Imported ${imported} product${imported === 1 ? '' : 's'}${skipped ? `, skipped ${skipped} invalid row${skipped === 1 ? '' : 's'}` : ''}.`);
     document.getElementById('invCsvText').value = '';
     document.getElementById('invBulkImportBox').classList.add('d-none');
@@ -1716,7 +1843,7 @@ function renderHistory() {
    EVENT WIRING
    ========================================================= */
 function wireAddItemForm() {
-  document.getElementById('addItemForm').addEventListener('submit', e => {
+  document.getElementById('addItemForm').addEventListener('submit', async e => {
     e.preventDefault();
     const name = document.getElementById('itemName').value.trim();
     const qty = parseFloat(document.getElementById('itemQty').value);
@@ -1737,7 +1864,7 @@ function wireAddItemForm() {
     editingItemId = null;
     document.getElementById('addItemBtn').innerHTML = '<i class="bi bi-plus-lg"></i>';
 
-    upsertCatalog(name, price, barcode);
+    await upsertCatalog(name, price, barcode);
     playItemAddedSound();
 
     e.target.reset();
@@ -1813,18 +1940,18 @@ function wireSaleDetailInputs() {
 
 function wireTemplateAndPaper() {
   document.querySelectorAll('.tmpl-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
+    tab.addEventListener('click', async () => {
       document.querySelectorAll('.tmpl-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       state.settings.template = tab.dataset.tmpl;
-      storageSet('settings', state.settings);
+      await storageSet('settings', state.settings);
       renderPreview();
     });
   });
 
-  document.getElementById('paperSize').addEventListener('change', e => {
+  document.getElementById('paperSize').addEventListener('change', async e => {
     state.settings.paperSize = e.target.value;
-    storageSet('settings', state.settings);
+    await storageSet('settings', state.settings);
     renderPreview();
   });
 }
@@ -1906,7 +2033,7 @@ async function persistCurrentInvoice(opts) {
   // Deduct sold quantities from tracked stock — only happens here, right
   // when a sale is newly recorded to history, so re-printing/re-sharing the
   // same unmodified sale never deducts twice.
-  deductStockForSale(snapshot.items);
+  await deductStockForSale(snapshot.items);
 
   state.settings.counter = (state.settings.counter || 1) + 1;
   await storageSet('settings', state.settings);
@@ -2073,15 +2200,15 @@ function applyDashboardVisibility() {
 }
 
 function wireDashboardToggle() {
-  document.getElementById('dashToggleBtn').addEventListener('click', () => {
+  document.getElementById('dashToggleBtn').addEventListener('click', async () => {
     state.settings.dashboardHidden = !state.settings.dashboardHidden;
-    storageSet('settings', state.settings);
+    await storageSet('settings', state.settings);
     applyDashboardVisibility();
   });
 }
 
 function wireHistoryModal() {
-  document.getElementById('historyBody').addEventListener('click', e => {
+  document.getElementById('historyBody').addEventListener('click', async e => {
     const viewBtn = e.target.closest('.view-history-btn');
     const delBtn = e.target.closest('.delete-history-btn');
 
@@ -2092,7 +2219,7 @@ function wireHistoryModal() {
     }
     if (delBtn) {
       state.history = state.history.filter(h => h.id !== delBtn.dataset.id);
-      storageSet('history', state.history);
+      await storageSet('history', state.history);
       renderHistory();
       renderDashboard();
     }
@@ -2150,7 +2277,10 @@ function fillSettingsForm() {
    Uses the html5-qrcode library (camera-based, works in Chrome/Edge/
    Safari on both Android and iPhone — unlike the native BarcodeDetector
    API, which iOS does not support). Every recognized code is looked up
-   in the product catalog by its linked barcode:
+   in the product catalog by its linked barcode (via findCatalogByBarcode,
+   which now matches on a NORMALIZED code — see normalizeBarcode above —
+   so the same physical barcode is recognized even if the scanner returns
+   it in a slightly different digit format from one scan to the next):
      - Known code  -> instantly added to the cart (or its qty bumped by 1
                        if that exact barcode is already in the cart), and
                        scanning KEEPS RUNNING for the next product.
@@ -2167,6 +2297,8 @@ let scanCooldown = new Map(); // code -> timestamp of last accepted scan
 const SCAN_COOLDOWN_MS = 1800;
 let scannerPausedForUnknown = false;
 let pendingUnknownCode = null;
+let torchOn = false;
+let torchSupported = false;
 
 function prependScanLog(text, qtyLabel) {
   const log = document.getElementById('scanLog');
@@ -2183,10 +2315,11 @@ function flashScanner() {
   setTimeout(() => flash.classList.remove('active'), 150);
 }
 
-function addScannedProductToCart(product) {
+async function addScannedProductToCart(product) {
   // If this exact barcode is already the most recent matching line in the
   // cart, bump its quantity instead of adding a duplicate row.
-  const existingLine = state.cart.find(it => it.barcode && it.barcode === product.barcode);
+  const key = normalizeBarcode(product.barcode);
+  const existingLine = state.cart.find(it => it.barcode && normalizeBarcode(it.barcode) === key);
   if (existingLine) {
     existingLine.qty = Number(existingLine.qty) + 1;
     prependScanLog(product.name, 'x' + existingLine.qty);
@@ -2211,12 +2344,17 @@ function addScannedProductToCart(product) {
 function handleScannedCode(code) {
   if (scannerPausedForUnknown) return; // ignore new scans while the unknown-item form is open
 
-  const last = scanCooldown.get(code) || 0;
+  const normKey = normalizeBarcode(code);
+  const last = scanCooldown.get(normKey) || 0;
   if (Date.now() - last < SCAN_COOLDOWN_MS) return; // debounce repeated frames of the same code
-  scanCooldown.set(code, Date.now());
+  scanCooldown.set(normKey, Date.now());
 
   flashScanner();
 
+  // Look up using the SAME real barcode string every time this physical
+  // code is scanned — findCatalogByBarcode compares on the normalized
+  // form, so the existing product is found instead of a fresh "unknown
+  // code" prompt being shown for what is actually the same item.
   const product = findCatalogByBarcode(code);
   if (product) {
     addScannedProductToCart(product);
@@ -2233,15 +2371,17 @@ function handleScannedCode(code) {
 }
 
 function wireUnknownScanForm() {
-  document.getElementById('scanUnknownSaveBtn').addEventListener('click', () => {
+  document.getElementById('scanUnknownSaveBtn').addEventListener('click', async () => {
     const name = document.getElementById('scanUnknownName').value.trim();
     const price = parseFloat(document.getElementById('scanUnknownPrice').value);
     if (!name || isNaN(price) || price < 0) {
       showToast('Enter a product name and a valid price.');
       return;
     }
-    upsertCatalog(name, price, pendingUnknownCode);
-    addScannedProductToCart({ name, price, barcode: pendingUnknownCode });
+    // Store the exact code as scanned — this is the item's REAL barcode,
+    // never a generated/placeholder value.
+    await upsertCatalog(name, price, pendingUnknownCode);
+    await addScannedProductToCart({ name, price, barcode: pendingUnknownCode });
     closeUnknownScanBox();
   });
 
@@ -2256,6 +2396,41 @@ function closeUnknownScanBox() {
   pendingUnknownCode = null;
 }
 
+/* Detects torch (flashlight) support on the active camera track and shows
+   the toggle button only when the device actually supports it. */
+async function detectTorchSupport() {
+  const btn = document.getElementById('torchToggleBtn');
+  try {
+    if (!qrScanner || typeof qrScanner.getRunningTrackCapabilities !== 'function') {
+      btn.classList.add('d-none');
+      return;
+    }
+    const capabilities = qrScanner.getRunningTrackCapabilities();
+    torchSupported = !!(capabilities && capabilities.torch);
+    btn.classList.toggle('d-none', !torchSupported);
+  } catch (e) {
+    torchSupported = false;
+    btn.classList.add('d-none');
+  }
+}
+
+async function toggleTorch() {
+  if (!qrScanner || !torchSupported) return;
+  try {
+    torchOn = !torchOn;
+    await qrScanner.applyVideoConstraints({ advanced: [{ torch: torchOn }] });
+    document.getElementById('torchToggleBtn').classList.toggle('active', torchOn);
+  } catch (e) {
+    console.warn('Could not toggle torch', e);
+    torchOn = !torchOn; // revert
+    showToast('Could not toggle flashlight on this device.');
+  }
+}
+
+function wireTorchToggle() {
+  document.getElementById('torchToggleBtn').addEventListener('click', toggleTorch);
+}
+
 function startScanner() {
   if (typeof Html5Qrcode === 'undefined') {
     showToast('Scanner library failed to load — check your internet connection.');
@@ -2263,8 +2438,12 @@ function startScanner() {
   }
   scanSessionCount = 0;
   scanCooldown.clear();
+  torchOn = false;
+  torchSupported = false;
   document.getElementById('scanLog').innerHTML = '';
   document.getElementById('scanCountLabel').textContent = '0 items added this session';
+  document.getElementById('torchToggleBtn').classList.add('d-none');
+  document.getElementById('torchToggleBtn').classList.remove('active');
   closeUnknownScanBox();
 
   qrScanner = new Html5Qrcode('scannerReader', {
@@ -2286,7 +2465,9 @@ function startScanner() {
     { fps: 10, qrbox: { width: 250, height: 180 } },
     decodedText => handleScannedCode(decodedText.trim()),
     () => { /* per-frame "not found" noise — ignored intentionally */ }
-  ).catch(err => {
+  ).then(() => {
+    detectTorchSupport();
+  }).catch(err => {
     console.error(err);
     showToast('Could not access camera. Check camera permission for this site.');
   });
@@ -2297,6 +2478,8 @@ function stopScanner() {
     qrScanner.stop().then(() => qrScanner.clear()).catch(() => {});
     qrScanner = null;
   }
+  torchOn = false;
+  torchSupported = false;
   closeUnknownScanBox();
 }
 
@@ -2305,6 +2488,7 @@ function wireScannerModal() {
   modalEl.addEventListener('shown.bs.modal', startScanner);
   modalEl.addEventListener('hidden.bs.modal', stopScanner);
   wireUnknownScanForm();
+  wireTorchToggle();
 }
 
 /* =========================================================
@@ -2324,6 +2508,11 @@ function wireScannerModal() {
    Settings), the "cut" command is now optional and sent as its own
    isolated write that can fail without affecting the receipt text,
    and more known service UUIDs are scanned for a writable characteristic.
+
+   The persistent "Printer not connected" pill has been removed from the
+   navbar (it was just noise for the vast majority of users who never pair
+   a Bluetooth printer) — the pill now only appears once a printer is
+   actually connected, as a small confirmation.
    ========================================================= */
 const KNOWN_PRINTER_SERVICES = [
   '000018f0-0000-1000-8000-00805f9b34fb', // common generic ESC/POS BLE printer service
@@ -2337,6 +2526,9 @@ const KNOWN_PRINTER_SERVICES = [
 function setBtStatus(connected, label) {
   const pill = document.getElementById('btStatusPill');
   pill.classList.toggle('connected', connected);
+  // Only show the pill once a printer is actually connected — no more
+  // permanent "Printer not connected" clutter in the navbar.
+  pill.classList.toggle('d-none', !connected);
   document.getElementById('btStatusText').textContent = label;
   document.getElementById('printBtBtn').disabled = !connected;
 }
