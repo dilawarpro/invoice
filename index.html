@@ -876,30 +876,99 @@ let btDevice = null;
 let btCharacteristic = null;
 
 /* =========================================================
-   STORAGE HELPERS (artifact persistent storage)
+   STORAGE LAYER — standalone, works on ANY device/browser
+
+   Earlier this used Claude's window.storage API, which only exists
+   while previewing inside Claude's own chat interface — once this
+   file is downloaded, hosted, or installed on a shopkeeper's own
+   computer/phone (the actual deployment target), that API does not
+   exist at all, so every save silently failed and nothing survived
+   a refresh. This is why data kept disappearing.
+
+   Fix: use IndexedDB, a real database built into every modern
+   browser, with an automatic localStorage fallback if IndexedDB is
+   ever unavailable (very old browsers, some private-browsing modes).
+   Both work fully offline and are local to that one device/browser —
+   there is no cloud sync between different shopkeepers' devices.
    ========================================================= */
+const DB_NAME = 'dukanslip_db';
+const DB_VERSION = 1;
+const STORE_NAME = 'kv';
+const LS_PREFIX = 'dukanslip:';
+let dbPromise = null;
+
+function openDb() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise(resolve => {
+    if (!('indexedDB' in window)) { resolve(null); return; }
+    try {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null); // fall back to localStorage
+    } catch (e) {
+      resolve(null);
+    }
+  });
+  return dbPromise;
+}
+
+async function idbGet(key) {
+  const db = await openDb();
+  if (!db) return undefined;
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(undefined);
+    } catch (e) {
+      resolve(undefined);
+    }
+  });
+}
+
+async function idbSet(key, value) {
+  const db = await openDb();
+  if (!db) return false;
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(value, key);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    } catch (e) {
+      resolve(false);
+    }
+  });
+}
+
 async function storageGet(key, fallback) {
   try {
-    const res = await window.storage.get(key, false);
-    if (res && typeof res.value === 'string') return JSON.parse(res.value);
-    return fallback;
+    const idbVal = await idbGet(key);
+    if (idbVal !== undefined) return JSON.parse(idbVal);
   } catch (e) {
-    // A brand-new key throws instead of returning null (per the storage
-    // API), so this is the expected path on first-ever run. Any other
-    // failure (offline, storage backend hiccup) also lands here — we still
-    // return the fallback so the app keeps working, but we log it so it's
-    // visible in devtools instead of silently vanishing.
-    console.warn('Storage read failed for', key, e);
-    return fallback;
+    console.warn('IndexedDB read failed for', key, e);
   }
+  // localStorage fallback (also covers first-run migration if a browser
+  // only ever had localStorage data from some other source)
+  try {
+    const raw = localStorage.getItem(LS_PREFIX + key);
+    if (raw !== null) return JSON.parse(raw);
+  } catch (e) {
+    console.warn('localStorage read failed for', key, e);
+  }
+  return fallback;
 }
 
 /**
  * Writes a key to persistent storage and RETURNS THE PROMISE so callers can
- * await it. Earlier versions of this app fired storageSet() without
- * awaiting it from most event handlers — if the tab was closed or refreshed
- * a moment later, the in-flight write could be abandoned and the change
- * silently lost. Every call site below now awaits this.
+ * await it. Every call site below awaits this, so a save is fully written
+ * before the UI moves on — closing or refreshing the tab a moment later
+ * can no longer abandon an in-flight write.
  */
 async function storageSet(key, value) {
   if (!state._loaded) {
@@ -908,22 +977,28 @@ async function storageSet(key, value) {
   }
   state.pendingWrites++;
   updateSaveIndicator();
+  const json = JSON.stringify(value);
+  let ok = false;
   try {
-    const result = await window.storage.set(key, JSON.stringify(value), false);
-    if (!result) {
-      console.error('Storage write returned no result for', key);
-      showToast('Could not save changes — please check your connection.');
-      return false;
-    }
-    return true;
+    ok = await idbSet(key, json);
   } catch (e) {
-    console.error('Storage write failed for', key, e);
-    showToast('Could not save changes — please check your connection.');
-    return false;
-  } finally {
-    state.pendingWrites = Math.max(0, state.pendingWrites - 1);
-    updateSaveIndicator();
+    console.warn('IndexedDB write failed for', key, e);
   }
+  // Always mirror to localStorage too — cheap extra safety net in case
+  // IndexedDB gets cleared or is unreliable on a particular device.
+  try {
+    localStorage.setItem(LS_PREFIX + key, json);
+    ok = true;
+  } catch (e) {
+    console.warn('localStorage write failed for', key, e);
+  }
+  if (!ok) {
+    console.error('Storage write failed for', key);
+    showToast('Could not save changes on this device.');
+  }
+  state.pendingWrites = Math.max(0, state.pendingWrites - 1);
+  updateSaveIndicator();
+  return ok;
 }
 
 function updateSaveIndicator() {
