@@ -832,7 +832,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
 <script>
 'use strict';
 
@@ -2332,13 +2332,18 @@ function fillSettingsForm() {
 /* =========================================================
    BARCODE / QR SCANNER (continuous scan-to-cart)
 
-   Uses the html5-qrcode library (camera-based, works in Chrome/Edge/
-   Safari on both Android and iPhone — unlike the native BarcodeDetector
-   API, which iOS does not support). Every recognized code is looked up
-   in the product catalog by its linked barcode (via findCatalogByBarcode,
-   which now matches on a NORMALIZED code — see normalizeBarcode above —
-   so the same physical barcode is recognized even if the scanner returns
-   it in a slightly different digit format from one scan to the next):
+   Uses ZXing (@zxing/library) — an actively maintained, industry-standard
+   multi-format reader — with TRY_HARDER decoding hints enabled. TRY_HARDER
+   makes it run extra binarization and scan-line passes on every frame,
+   which is what lets it read codes on curved/bent product labels, skewed
+   angles, and slightly blurry shots that a basic single-pass decoder
+   would miss, while still scanning continuously and quickly.
+
+   Every recognized code is looked up in the product catalog by its linked
+   barcode (via findCatalogByBarcode, which matches on a NORMALIZED code —
+   see normalizeBarcode above — so the same physical barcode is recognized
+   even if the scanner returns it in a slightly different digit format
+   from one scan to the next):
      - Known code  -> instantly added to the cart (or its qty bumped by 1
                        if that exact barcode is already in the cart), and
                        scanning KEEPS RUNNING for the next product.
@@ -2349,10 +2354,11 @@ function fillSettingsForm() {
    A short per-code cooldown prevents the same barcode from being added
    twice if it stays in frame for a moment.
    ========================================================= */
-let qrScanner = null;
+let zxingReader = null;
+let scannerControls = null;
 let scanSessionCount = 0;
 let scanCooldown = new Map(); // code -> timestamp of last accepted scan
-const SCAN_COOLDOWN_MS = 1800;
+const SCAN_COOLDOWN_MS = 1000;
 let scannerPausedForUnknown = false;
 let pendingUnknownCode = null;
 let torchOn = false;
@@ -2454,16 +2460,21 @@ function closeUnknownScanBox() {
   pendingUnknownCode = null;
 }
 
+/* Returns the live camera track currently feeding the scanner video, if any. */
+function getActiveVideoTrack() {
+  const video = document.getElementById('scannerVideoEl');
+  if (!video || !video.srcObject) return null;
+  const tracks = video.srcObject.getVideoTracks ? video.srcObject.getVideoTracks() : [];
+  return tracks && tracks[0] ? tracks[0] : null;
+}
+
 /* Detects torch (flashlight) support on the active camera track and shows
    the toggle button only when the device actually supports it. */
 async function detectTorchSupport() {
   const btn = document.getElementById('torchToggleBtn');
   try {
-    if (!qrScanner || typeof qrScanner.getRunningTrackCapabilities !== 'function') {
-      btn.classList.add('d-none');
-      return;
-    }
-    const capabilities = qrScanner.getRunningTrackCapabilities();
+    const track = getActiveVideoTrack();
+    const capabilities = track && track.getCapabilities ? track.getCapabilities() : null;
     torchSupported = !!(capabilities && capabilities.torch);
     btn.classList.toggle('d-none', !torchSupported);
   } catch (e) {
@@ -2473,10 +2484,11 @@ async function detectTorchSupport() {
 }
 
 async function toggleTorch() {
-  if (!qrScanner || !torchSupported) return;
+  const track = getActiveVideoTrack();
+  if (!track || !torchSupported) return;
   try {
     torchOn = !torchOn;
-    await qrScanner.applyVideoConstraints({ advanced: [{ torch: torchOn }] });
+    await track.applyConstraints({ advanced: [{ torch: torchOn }] });
     document.getElementById('torchToggleBtn').classList.toggle('active', torchOn);
   } catch (e) {
     console.warn('Could not toggle torch', e);
@@ -2489,8 +2501,32 @@ function wireTorchToggle() {
   document.getElementById('torchToggleBtn').addEventListener('click', toggleTorch);
 }
 
-function startScanner() {
-  if (typeof Html5Qrcode === 'undefined') {
+/* Builds a ZXing reader configured to scan every format this app cares
+   about, with TRY_HARDER enabled. TRY_HARDER makes ZXing run extra
+   binarization and scan-line passes per frame instead of a single quick
+   pass — this is specifically what lets it read barcodes on curved/bent
+   product surfaces, skewed angles, and slightly blurry shots that a basic
+   decoder gives up on. The short 120ms interval keeps it scanning
+   continuously and quickly between those thorough attempts. */
+function buildZxingReader() {
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+    ZXing.BarcodeFormat.QR_CODE,
+    ZXing.BarcodeFormat.EAN_13,
+    ZXing.BarcodeFormat.EAN_8,
+    ZXing.BarcodeFormat.UPC_A,
+    ZXing.BarcodeFormat.UPC_E,
+    ZXing.BarcodeFormat.CODE_128,
+    ZXing.BarcodeFormat.CODE_39,
+    ZXing.BarcodeFormat.ITF,
+    ZXing.BarcodeFormat.CODABAR
+  ]);
+  return new ZXing.BrowserMultiFormatReader(hints, 120);
+}
+
+async function startScanner() {
+  if (typeof ZXing === 'undefined') {
     showToast('Scanner library failed to load — check your internet connection.');
     return;
   }
@@ -2504,38 +2540,44 @@ function startScanner() {
   document.getElementById('torchToggleBtn').classList.remove('active');
   closeUnknownScanBox();
 
-  qrScanner = new Html5Qrcode('scannerReader', {
-    formatsToSupport: [
-      Html5QrcodeSupportedFormats.QR_CODE,
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.UPC_A,
-      Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.CODE_128,
-      Html5QrcodeSupportedFormats.CODE_39,
-      Html5QrcodeSupportedFormats.ITF
-    ],
-    verbose: false
-  });
+  const readerDiv = document.getElementById('scannerReader');
+  readerDiv.innerHTML = '<video id="scannerVideoEl" muted playsinline></video>';
+  const videoEl = document.getElementById('scannerVideoEl');
 
-  qrScanner.start(
-    { facingMode: 'environment' },
-    { fps: 10, qrbox: { width: 250, height: 180 } },
-    decodedText => handleScannedCode(decodedText.trim()),
-    () => { /* per-frame "not found" noise — ignored intentionally */ }
-  ).then(() => {
+  zxingReader = buildZxingReader();
+
+  try {
+    scannerControls = await zxingReader.decodeFromConstraints(
+      {
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          advanced: [{ focusMode: 'continuous' }]
+        }
+      },
+      videoEl,
+      (result) => {
+        if (result) handleScannedCode(result.getText().trim());
+        // per-frame "not found" attempts are expected noise — ignored intentionally
+      }
+    );
     detectTorchSupport();
-  }).catch(err => {
+  } catch (err) {
     console.error(err);
     showToast('Could not access camera. Check camera permission for this site.');
-  });
+  }
 }
 
 function stopScanner() {
-  if (qrScanner) {
-    qrScanner.stop().then(() => qrScanner.clear()).catch(() => {});
-    qrScanner = null;
-  }
+  try { if (scannerControls) scannerControls.stop(); } catch (e) {}
+  scannerControls = null;
+  try {
+    const track = getActiveVideoTrack();
+    if (track) track.stop();
+  } catch (e) {}
+  const videoEl = document.getElementById('scannerVideoEl');
+  if (videoEl) videoEl.srcObject = null;
   torchOn = false;
   torchSupported = false;
   closeUnknownScanBox();
