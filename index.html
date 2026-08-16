@@ -351,11 +351,18 @@
      changes). These rules apply on ANY @media print event — regardless of
      whether printing was triggered by our in-app "Print" button, the
      browser's own menu, a share sheet, or a keyboard shortcut — because
-     they don't depend on a JS class being toggled first. */
-  #printRoot{ display:none; }
+     they don't depend on a JS class being toggled first (this stays the
+     DEFAULT print target).
+
+     #printInventoryRoot is a second, separate print target used only for
+     the explicit "Export PDF" button in Inventory — it's gated behind the
+     body.printing-inventory class (added right before that one
+     window.print() call and removed afterward), so it never interferes
+     with normal receipt printing. */
+  #printRoot, #printInventoryRoot{ display:none; }
   @media print{
     html, body{ margin:0 !important; padding:0 !important; background:#fff !important; }
-    body > *:not(#printRoot){ display:none !important; }
+    body > *:not(#printRoot):not(#printInventoryRoot){ display:none !important; }
     #printRoot{
       display:block !important;
       margin:0 !important;
@@ -370,6 +377,22 @@
     #printRoot .paper-58{ width:58mm !important; }
     #printRoot .paper-80{ width:80mm !important; }
     #printRoot .paper-a4{ width:190mm !important; }
+
+    body.printing-inventory #printRoot{ display:none !important; }
+    body.printing-inventory #printInventoryRoot{
+      display:block !important;
+      padding:10mm !important;
+    }
+    #printInventoryRoot h2{
+      margin:0 0 2px 0; font-family:'Sora',Arial,sans-serif; font-size:16px;
+    }
+    #printInventoryRoot .inv-print-meta{
+      font-size:11px; color:#555; margin-bottom:10px; font-family:Arial,sans-serif;
+    }
+    #printInventoryRoot table{ width:100%; border-collapse:collapse; font-family:Arial,sans-serif; }
+    #printInventoryRoot th, #printInventoryRoot td{
+      border:1px solid #333; padding:4px 6px; font-size:11px; text-align:left;
+    }
   }
 </style>
 </head>
@@ -715,6 +738,8 @@
           <input type="text" id="invSearch" class="form-control" style="max-width:260px;" placeholder="Search by name or barcode...">
           <button type="button" class="btn btn-brand btn-sm" id="invShowAddBtn"><i class="bi bi-plus-lg"></i> Add product</button>
           <button type="button" class="btn btn-outline-secondary btn-sm" id="invShowImportBtn"><i class="bi bi-upload"></i> Bulk import (CSV)</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="invExportCsvBtn"><i class="bi bi-download"></i> Export CSV</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="invExportPdfBtn"><i class="bi bi-file-earmark-pdf"></i> Export PDF</button>
           <span class="small rc-muted ms-auto" id="invCountLabel">0 products</span>
         </div>
 
@@ -781,13 +806,21 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
+        <div class="d-flex gap-2 mb-2">
+          <button type="button" class="btn btn-sm btn-brand flex-fill" id="scanModeSellBtn" data-mode="sell"><i class="bi bi-cart3"></i> Add to Sale</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary flex-fill" id="scanModeRestockBtn" data-mode="restock"><i class="bi bi-box-seam"></i> Add Stock (Inventory)</button>
+        </div>
+        <div id="scanQtyRow" class="mb-2 d-none">
+          <label class="form-label small mb-1">Qty to add to inventory per scan</label>
+          <input type="number" id="scanRestockQty" class="form-control form-control-sm" value="1" min="1" step="1">
+        </div>
         <div class="position-relative">
           <div id="scannerReader"></div>
           <div class="scan-flash" id="scanFlash"></div>
           <button type="button" class="torch-toggle-btn d-none" id="torchToggleBtn"><i class="bi bi-flashlight"></i> Flash</button>
         </div>
         <p class="small rc-muted mt-2 mb-2">
-          <i class="bi bi-info-circle"></i> Point the camera at a product's barcode or QR code. Each recognized code is added to the cart automatically — keep scanning for the next item, no need to close this window. If it's dark, tap <strong>Flash</strong> to turn on the torch.
+          <i class="bi bi-info-circle"></i> Point the camera at a product's barcode or QR code. In <strong>Add to Sale</strong> mode, each scan adds the item to the cart. Switch to <strong>Add Stock</strong> to increase inventory counts instead — no need to close this window between scans. If it's dark, tap <strong>Flash</strong> to turn on the torch.
         </p>
 
         <div id="scanUnknownBox" class="d-none mb-2">
@@ -829,6 +862,8 @@
 
 <!-- Isolated container used only while printing (see #printRoot rules in <style> above) -->
 <div id="printRoot"></div>
+<!-- Isolated container used only for the Inventory "Export PDF" print target -->
+<div id="printInventoryRoot"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -1774,6 +1809,96 @@ async function importCsvText(text) {
   return { imported, skipped };
 }
 
+/* Builds a CSV of the FULL inventory (not just the current search filter),
+   in the exact same `name,price,barcode,stock` shape the Bulk Import box
+   accepts — so a file exported here can be re-imported as-is, on this
+   device or a different one. */
+function buildInventoryCsv() {
+  const csvField = v => {
+    const s = String(v == null ? '' : v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const rows = state.catalog.map(p => [
+    csvField(p.name),
+    p.price != null ? p.price : '',
+    csvField(p.barcode || ''),
+    p.stock != null ? p.stock : ''
+  ].join(','));
+  return ['name,price,barcode,stock', ...rows].join('\n');
+}
+
+function downloadTextFile(filename, text, mime) {
+  const blob = new Blob([text], { type: mime || 'text/plain' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function exportInventoryCsv() {
+  if (state.catalog.length === 0) {
+    showToast('No products to export yet.');
+    return;
+  }
+  const csv = buildInventoryCsv();
+  const filename = 'inventory_' + new Date().toISOString().slice(0, 10) + '.csv';
+  downloadTextFile(filename, csv, 'text/csv');
+  showToast(`Exported ${state.catalog.length} product${state.catalog.length === 1 ? '' : 's'} to CSV.`);
+}
+
+/* Builds the printable HTML table used for the inventory PDF export — full
+   inventory, not just the current search filter. */
+function buildInventoryPrintHtml() {
+  const rows = state.catalog.map((p, idx) => `
+    <tr>
+      <td>${idx + 1}</td>
+      <td>${escapeHtml(p.name)}</td>
+      <td>${escapeHtml(p.barcode || '—')}</td>
+      <td>${fmt(p.price)}</td>
+      <td>${p.stock != null ? p.stock : 'untracked'}</td>
+    </tr>`).join('');
+  const ts = nowStrings();
+  return `
+    <h2>${escapeHtml(state.settings.businessName)} — Inventory</h2>
+    <div class="inv-print-meta">Exported ${ts.display} · ${state.catalog.length} product${state.catalog.length === 1 ? '' : 's'}</div>
+    <table>
+      <thead><tr><th>#</th><th>Product</th><th>Barcode</th><th>Price</th><th>Stock</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="5">No products yet.</td></tr>'}</tbody>
+    </table>`;
+}
+
+function applyInventoryPrintPageSize() {
+  let styleTag = document.getElementById('dynamicPrintStyle');
+  if (!styleTag) {
+    styleTag = document.createElement('style');
+    styleTag.id = 'dynamicPrintStyle';
+    document.head.appendChild(styleTag);
+  }
+  styleTag.textContent = `@media print { @page { size: A4; margin: 10mm; } }`;
+}
+
+/* Exports the full inventory as a PDF via the browser's own "Save as PDF"
+   print option — this reuses the same #printRoot isolation technique the
+   receipt printing already relies on (see the print CSS), just pointed at
+   a second, inventory-only print target so it never interferes with
+   normal receipt printing. */
+function exportInventoryPdf() {
+  if (state.catalog.length === 0) {
+    showToast('No products to export yet.');
+    return;
+  }
+  const root = document.getElementById('printInventoryRoot');
+  root.innerHTML = buildInventoryPrintHtml();
+  applyInventoryPrintPageSize();
+  document.body.classList.add('printing-inventory');
+  window.print();
+}
+
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('printing-inventory');
+});
+
 function wireInventoryModal() {
   const modalEl = document.getElementById('inventoryModal');
   modalEl.addEventListener('show.bs.modal', () => {
@@ -1786,6 +1911,9 @@ function wireInventoryModal() {
 
   document.getElementById('invShowAddBtn').addEventListener('click', () => showInvAddForm(null));
   document.getElementById('invCancelAddBtn').addEventListener('click', hideInvAddForm);
+
+  document.getElementById('invExportCsvBtn').addEventListener('click', exportInventoryCsv);
+  document.getElementById('invExportPdfBtn').addEventListener('click', exportInventoryPdf);
 
   document.getElementById('invShowImportBtn').addEventListener('click', () => {
     hideInvAddForm();
@@ -2118,7 +2246,11 @@ function wireSaveAndPrint() {
   /* Covers every way a physical print can be triggered — this button,
      the browser's own Print menu, or Ctrl+P — so the sale is always
      recorded to history and the dashboard before the print dialog opens. */
-  window.addEventListener('beforeprint', () => { persistCurrentInvoice({ silent: true }); });
+  window.addEventListener('beforeprint', () => {
+    if (!document.body.classList.contains('printing-inventory')) {
+      persistCurrentInvoice({ silent: true });
+    }
+  });
 }
 
 /* Set the physical @page size/margins to match the selected paper before
@@ -2357,6 +2489,7 @@ let scannerPausedForUnknown = false;
 let pendingUnknownCode = null;
 let torchOn = false;
 let torchSupported = false;
+let scanMode = 'sell'; // 'sell' (add to cart) or 'restock' (add qty to inventory stock)
 
 function prependScanLog(text, qtyLabel) {
   const log = document.getElementById('scanLog');
@@ -2399,6 +2532,54 @@ async function addScannedProductToCart(product) {
   renderCart();
 }
 
+function setScanMode(mode) {
+  scanMode = mode;
+  const sellBtn = document.getElementById('scanModeSellBtn');
+  const restockBtn = document.getElementById('scanModeRestockBtn');
+  sellBtn.classList.toggle('btn-brand', mode === 'sell');
+  sellBtn.classList.toggle('btn-outline-secondary', mode !== 'sell');
+  restockBtn.classList.toggle('btn-brand', mode === 'restock');
+  restockBtn.classList.toggle('btn-outline-secondary', mode !== 'restock');
+  document.getElementById('scanQtyRow').classList.toggle('d-none', mode !== 'restock');
+}
+
+function wireScanModeToggle() {
+  document.getElementById('scanModeSellBtn').addEventListener('click', () => setScanMode('sell'));
+  document.getElementById('scanModeRestockBtn').addEventListener('click', () => setScanMode('restock'));
+}
+
+/* Adds the configured "qty to add per scan" straight onto a product's
+   tracked inventory stock — this is the "Add Stock" scan mode, separate
+   from the normal sale flow, for quickly recording a delivery/restock by
+   scanning each product instead of typing quantities by hand. Starts
+   tracking stock (from 0) if the product wasn't tracked before. */
+async function handleRestockScan(code, product) {
+  const qtyToAdd = Math.max(1, parseFloat(document.getElementById('scanRestockQty').value) || 1);
+
+  if (product) {
+    const newStock = (product.stock != null ? Number(product.stock) : 0) + qtyToAdd;
+    product.stock = newStock;
+    await storageSet('catalog', state.catalog);
+    renderCatalogDatalist();
+    renderInventoryTable();
+    scanSessionCount++;
+    document.getElementById('scanCountLabel').textContent = scanSessionCount + ' items added this session';
+    prependScanLog(product.name, '+' + qtyToAdd + ' (now ' + newStock + ')');
+    playItemAddedSound();
+  } else {
+    // Unknown barcode while restocking — pause for a name+price mini form,
+    // same as the sale flow, then create the product already stocked with
+    // the configured qty-per-scan.
+    scannerPausedForUnknown = true;
+    pendingUnknownCode = code;
+    document.getElementById('scanUnknownCode').textContent = code;
+    document.getElementById('scanUnknownName').value = '';
+    document.getElementById('scanUnknownPrice').value = '';
+    document.getElementById('scanUnknownBox').classList.remove('d-none');
+    document.getElementById('scanUnknownName').focus();
+  }
+}
+
 function handleScannedCode(code) {
   if (scannerPausedForUnknown) return; // ignore new scans while the unknown-item form is open
 
@@ -2414,6 +2595,12 @@ function handleScannedCode(code) {
   // form, so the existing product is found instead of a fresh "unknown
   // code" prompt being shown for what is actually the same item.
   const product = findCatalogByBarcode(code);
+
+  if (scanMode === 'restock') {
+    handleRestockScan(code, product);
+    return;
+  }
+
   if (product) {
     addScannedProductToCart(product);
   } else {
@@ -2438,8 +2625,17 @@ function wireUnknownScanForm() {
     }
     // Store the exact code as scanned — this is the item's REAL barcode,
     // never a generated/placeholder value.
-    await upsertCatalog(name, price, pendingUnknownCode);
-    await addScannedProductToCart({ name, price, barcode: pendingUnknownCode });
+    if (scanMode === 'restock') {
+      const qtyToAdd = Math.max(1, parseFloat(document.getElementById('scanRestockQty').value) || 1);
+      const saved = await upsertCatalogFull({ name, price, barcode: pendingUnknownCode, stock: qtyToAdd });
+      scanSessionCount++;
+      document.getElementById('scanCountLabel').textContent = scanSessionCount + ' items added this session';
+      prependScanLog(saved.name, '+' + qtyToAdd + ' (now ' + saved.stock + ')');
+      playItemAddedSound();
+    } else {
+      await upsertCatalog(name, price, pendingUnknownCode);
+      await addScannedProductToCart({ name, price, barcode: pendingUnknownCode });
+    }
     closeUnknownScanBox();
   });
 
@@ -2502,6 +2698,8 @@ function startScanner() {
   document.getElementById('scanCountLabel').textContent = '0 items added this session';
   document.getElementById('torchToggleBtn').classList.add('d-none');
   document.getElementById('torchToggleBtn').classList.remove('active');
+  document.getElementById('scanRestockQty').value = 1;
+  setScanMode('sell');
   closeUnknownScanBox();
 
   qrScanner = new Html5Qrcode('scannerReader', {
@@ -2557,6 +2755,7 @@ function wireScannerModal() {
   modalEl.addEventListener('hidden.bs.modal', stopScanner);
   wireUnknownScanForm();
   wireTorchToggle();
+  wireScanModeToggle();
 }
 
 /* =========================================================
