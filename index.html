@@ -310,6 +310,22 @@
   }
   .torch-toggle-btn.active{ background:var(--amber); border-color:var(--amber); color:#1f2530; }
 
+  /* Realtime scanning animation (from the advanced scanner) */
+  .reticle{
+    position:absolute; inset:0; pointer-events:none;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .reticle-box{
+    width:80%; height:45%; border:2px solid #22c55e; border-radius:.5rem;
+    box-shadow:0 0 0 2000px rgba(0,0,0,.35);
+    position:relative;
+  }
+  .scan-line{
+    position:absolute; left:5%; right:5%; height:2px; background:#22c55e;
+    box-shadow:0 0 8px 2px #22c55e; animation:scanSweep 1.6s linear infinite;
+  }
+  @keyframes scanSweep{ 0%{top:5%} 50%{top:95%} 100%{top:5%} }
+
   /* ---------- Inventory ---------- */
   .inv-nav-btn{ position:relative; }
   .inv-badge{
@@ -351,18 +367,11 @@
      changes). These rules apply on ANY @media print event — regardless of
      whether printing was triggered by our in-app "Print" button, the
      browser's own menu, a share sheet, or a keyboard shortcut — because
-     they don't depend on a JS class being toggled first (this stays the
-     DEFAULT print target).
-
-     #printInventoryRoot is a second, separate print target used only for
-     the explicit "Export PDF" button in Inventory — it's gated behind the
-     body.printing-inventory class (added right before that one
-     window.print() call and removed afterward), so it never interferes
-     with normal receipt printing. */
-  #printRoot, #printInventoryRoot{ display:none; }
+     they don't depend on a JS class being toggled first. */
+  #printRoot{ display:none; }
   @media print{
     html, body{ margin:0 !important; padding:0 !important; background:#fff !important; }
-    body > *:not(#printRoot):not(#printInventoryRoot){ display:none !important; }
+    body > *:not(#printRoot){ display:none !important; }
     #printRoot{
       display:block !important;
       margin:0 !important;
@@ -377,22 +386,6 @@
     #printRoot .paper-58{ width:58mm !important; }
     #printRoot .paper-80{ width:80mm !important; }
     #printRoot .paper-a4{ width:190mm !important; }
-
-    body.printing-inventory #printRoot{ display:none !important; }
-    body.printing-inventory #printInventoryRoot{
-      display:block !important;
-      padding:10mm !important;
-    }
-    #printInventoryRoot h2{
-      margin:0 0 2px 0; font-family:'Sora',Arial,sans-serif; font-size:16px;
-    }
-    #printInventoryRoot .inv-print-meta{
-      font-size:11px; color:#555; margin-bottom:10px; font-family:Arial,sans-serif;
-    }
-    #printInventoryRoot table{ width:100%; border-collapse:collapse; font-family:Arial,sans-serif; }
-    #printInventoryRoot th, #printInventoryRoot td{
-      border:1px solid #333; padding:4px 6px; font-size:11px; text-align:left;
-    }
   }
 </style>
 </head>
@@ -739,7 +732,6 @@
           <button type="button" class="btn btn-brand btn-sm" id="invShowAddBtn"><i class="bi bi-plus-lg"></i> Add product</button>
           <button type="button" class="btn btn-outline-secondary btn-sm" id="invShowImportBtn"><i class="bi bi-upload"></i> Bulk import (CSV)</button>
           <button type="button" class="btn btn-outline-secondary btn-sm" id="invExportCsvBtn"><i class="bi bi-download"></i> Export CSV</button>
-          <button type="button" class="btn btn-outline-secondary btn-sm" id="invExportPdfBtn"><i class="bi bi-file-earmark-pdf"></i> Export PDF</button>
           <span class="small rc-muted ms-auto" id="invCountLabel">0 products</span>
         </div>
 
@@ -754,13 +746,13 @@
             <label class="form-label">Price</label>
             <input type="number" id="invPrice" class="form-control form-control-sm" min="0" step="0.01" required>
           </div>
+          <div class="col-6 col-sm-2">
+            <label class="form-label">Qty</label>
+            <input type="number" id="invStock" class="form-control form-control-sm" min="0" step="1" placeholder="untracked">
+          </div>
           <div class="col-6 col-sm-3">
             <label class="form-label">Barcode (optional)</label>
             <input type="text" id="invBarcode" class="form-control form-control-sm">
-          </div>
-          <div class="col-6 col-sm-2">
-            <label class="form-label">Stock qty</label>
-            <input type="number" id="invStock" class="form-control form-control-sm" min="0" step="1" placeholder="untracked">
           </div>
           <div class="col-6 col-sm-1">
             <label class="form-label">Low at</label>
@@ -806,36 +798,32 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <div class="d-flex gap-2 mb-2">
-          <button type="button" class="btn btn-sm btn-brand flex-fill" id="scanModeSellBtn" data-mode="sell"><i class="bi bi-cart3"></i> Add to Sale</button>
-          <button type="button" class="btn btn-sm btn-outline-secondary flex-fill" id="scanModeRestockBtn" data-mode="restock"><i class="bi bi-box-seam"></i> Add Stock (Inventory)</button>
-        </div>
-        <div id="scanQtyRow" class="mb-2 d-none">
-          <label class="form-label small mb-1">Qty to add to inventory per scan</label>
-          <input type="number" id="scanRestockQty" class="form-control form-control-sm" value="1" min="1" step="1">
-        </div>
         <div class="position-relative">
-          <div id="scannerReader"></div>
+          <div id="scannerReader"><video id="scannerVideoEl" muted playsinline></video></div>
+          <div class="reticle"><div class="reticle-box"><div class="scan-line"></div></div></div>
           <div class="scan-flash" id="scanFlash"></div>
           <button type="button" class="torch-toggle-btn d-none" id="torchToggleBtn"><i class="bi bi-flashlight"></i> Flash</button>
         </div>
         <p class="small rc-muted mt-2 mb-2">
-          <i class="bi bi-info-circle"></i> Point the camera at a product's barcode or QR code. In <strong>Add to Sale</strong> mode, each scan adds the item to the cart. Switch to <strong>Add Stock</strong> to increase inventory counts instead — no need to close this window between scans. If it's dark, tap <strong>Flash</strong> to turn on the torch.
+          <i class="bi bi-info-circle"></i> Point the camera at a product's barcode or QR code. A known item is added straight to the cart. A new code opens a quick form below to add it to your inventory. If it's dark, tap <strong>Flash</strong> to turn on the torch.
         </p>
 
         <div id="scanUnknownBox" class="d-none mb-2">
-          <div class="small fw-semibold mb-2"><i class="bi bi-question-circle"></i> New code scanned — not in your catalog yet</div>
+          <div class="small fw-semibold mb-2"><i class="bi bi-question-circle"></i> New code scanned — add it to your inventory</div>
           <div class="rc-mono small mb-2" id="scanUnknownCode"></div>
           <div class="row g-2">
-            <div class="col-7">
+            <div class="col-12">
               <input type="text" id="scanUnknownName" class="form-control form-control-sm" placeholder="Product name">
             </div>
-            <div class="col-5">
+            <div class="col-6">
               <input type="number" id="scanUnknownPrice" class="form-control form-control-sm" placeholder="Price" min="0" step="0.01">
+            </div>
+            <div class="col-6">
+              <input type="number" id="scanUnknownQty" class="form-control form-control-sm" placeholder="Qty" min="0" step="1">
             </div>
           </div>
           <div class="d-flex gap-2 mt-2">
-            <button type="button" class="btn btn-sm btn-brand flex-fill" id="scanUnknownSaveBtn"><i class="bi bi-check2"></i> Save &amp; add to cart</button>
+            <button type="button" class="btn btn-sm btn-brand flex-fill" id="scanUnknownSaveBtn"><i class="bi bi-check2"></i> Save to inventory</button>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="scanUnknownSkipBtn">Skip</button>
           </div>
         </div>
@@ -862,12 +850,9 @@
 
 <!-- Isolated container used only while printing (see #printRoot rules in <style> above) -->
 <div id="printRoot"></div>
-<!-- Isolated container used only for the Inventory "Export PDF" print target -->
-<div id="printInventoryRoot"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 'use strict';
 
@@ -1847,58 +1832,6 @@ function exportInventoryCsv() {
   showToast(`Exported ${state.catalog.length} product${state.catalog.length === 1 ? '' : 's'} to CSV.`);
 }
 
-/* Builds the printable HTML table used for the inventory PDF export — full
-   inventory, not just the current search filter. */
-function buildInventoryPrintHtml() {
-  const rows = state.catalog.map((p, idx) => `
-    <tr>
-      <td>${idx + 1}</td>
-      <td>${escapeHtml(p.name)}</td>
-      <td>${escapeHtml(p.barcode || '—')}</td>
-      <td>${fmt(p.price)}</td>
-      <td>${p.stock != null ? p.stock : 'untracked'}</td>
-    </tr>`).join('');
-  const ts = nowStrings();
-  return `
-    <h2>${escapeHtml(state.settings.businessName)} — Inventory</h2>
-    <div class="inv-print-meta">Exported ${ts.display} · ${state.catalog.length} product${state.catalog.length === 1 ? '' : 's'}</div>
-    <table>
-      <thead><tr><th>#</th><th>Product</th><th>Barcode</th><th>Price</th><th>Stock</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="5">No products yet.</td></tr>'}</tbody>
-    </table>`;
-}
-
-function applyInventoryPrintPageSize() {
-  let styleTag = document.getElementById('dynamicPrintStyle');
-  if (!styleTag) {
-    styleTag = document.createElement('style');
-    styleTag.id = 'dynamicPrintStyle';
-    document.head.appendChild(styleTag);
-  }
-  styleTag.textContent = `@media print { @page { size: A4; margin: 10mm; } }`;
-}
-
-/* Exports the full inventory as a PDF via the browser's own "Save as PDF"
-   print option — this reuses the same #printRoot isolation technique the
-   receipt printing already relies on (see the print CSS), just pointed at
-   a second, inventory-only print target so it never interferes with
-   normal receipt printing. */
-function exportInventoryPdf() {
-  if (state.catalog.length === 0) {
-    showToast('No products to export yet.');
-    return;
-  }
-  const root = document.getElementById('printInventoryRoot');
-  root.innerHTML = buildInventoryPrintHtml();
-  applyInventoryPrintPageSize();
-  document.body.classList.add('printing-inventory');
-  window.print();
-}
-
-window.addEventListener('afterprint', () => {
-  document.body.classList.remove('printing-inventory');
-});
-
 function wireInventoryModal() {
   const modalEl = document.getElementById('inventoryModal');
   modalEl.addEventListener('show.bs.modal', () => {
@@ -1913,7 +1846,6 @@ function wireInventoryModal() {
   document.getElementById('invCancelAddBtn').addEventListener('click', hideInvAddForm);
 
   document.getElementById('invExportCsvBtn').addEventListener('click', exportInventoryCsv);
-  document.getElementById('invExportPdfBtn').addEventListener('click', exportInventoryPdf);
 
   document.getElementById('invShowImportBtn').addEventListener('click', () => {
     hideInvAddForm();
@@ -2246,11 +2178,7 @@ function wireSaveAndPrint() {
   /* Covers every way a physical print can be triggered — this button,
      the browser's own Print menu, or Ctrl+P — so the sale is always
      recorded to history and the dashboard before the print dialog opens. */
-  window.addEventListener('beforeprint', () => {
-    if (!document.body.classList.contains('printing-inventory')) {
-      persistCurrentInvoice({ silent: true });
-    }
-  });
+  window.addEventListener('beforeprint', () => { persistCurrentInvoice({ silent: true }); });
 }
 
 /* Set the physical @page size/margins to match the selected paper before
@@ -2464,24 +2392,45 @@ function fillSettingsForm() {
 /* =========================================================
    BARCODE / QR SCANNER (continuous scan-to-cart)
 
-   Uses the html5-qrcode library (camera-based, works in Chrome/Edge/
-   Safari on both Android and iPhone — unlike the native BarcodeDetector
-   API, which iOS does not support). Every recognized code is looked up
-   in the product catalog by its linked barcode (via findCatalogByBarcode,
-   which now matches on a NORMALIZED code — see normalizeBarcode above —
-   so the same physical barcode is recognized even if the scanner returns
-   it in a slightly different digit format from one scan to the next):
+   Engine: native browser BarcodeDetector API first (built into Chrome/
+   Edge on Android and many desktops — no external script to download, so
+   it can't fail from a blocked CDN), falling back to ZXing (loaded from a
+   CDN, with several mirror URLs tried in turn) only on browsers without
+   BarcodeDetector (e.g. iOS Safari).
+
+   Two accuracy safeguards sit between the raw camera decode and this
+   app's normal handling, since a single blurry/rushed frame can decode to
+   a plausible-looking but WRONG code:
+     1. EAN/UPC codes carry a check digit — verified, and failures are
+        silently dropped instead of accepted.
+     2. The SAME code must be read on two consecutive frames before it's
+        accepted, instead of trusting any single frame.
+   Only once a code clears both does it reach handleScannedCode() below,
+   which is unchanged from before: every recognized code is looked up in
+   the product catalog by its linked barcode (via findCatalogByBarcode,
+   matching on a NORMALIZED code — see normalizeBarcode above):
      - Known code  -> instantly added to the cart (or its qty bumped by 1
                        if that exact barcode is already in the cart), and
                        scanning KEEPS RUNNING for the next product.
-     - Unknown code -> scanning pauses just long enough for a 2-field
-                       "name + price" mini form, which links the code to
-                       a new catalog entry and adds it to the cart, then
-                       scanning resumes automatically.
-   A short per-code cooldown prevents the same barcode from being added
-   twice if it stays in frame for a moment.
+     - Unknown code -> scanning pauses just long enough for a Name/Price/
+                       Qty mini form, which adds the product to INVENTORY
+                       (never the cart/receipt), then scanning resumes.
+   A short per-code cooldown still prevents the same barcode from being
+   added twice if it stays in frame for a moment.
    ========================================================= */
-let qrScanner = null;
+const NATIVE_ALL_FORMATS = ['qr_code','ean_13','ean_8','code_128','code_39','code_93','upc_a','upc_e','itf','codabar','data_matrix','pdf_417','aztec'];
+const ZXING_SOURCES = [
+  'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js',
+  'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js',
+  'https://cdn.jsdelivr.net/npm/@zxing/library@latest/umd/index.min.js'
+];
+
+let scanEngine = null;      // 'native' | 'zxing'
+let engineReadyPromise = null;
+let detector = null;        // native BarcodeDetector instance
+let codeReader = null;      // ZXing BrowserMultiFormatReader instance
+let scanRafId = null;
+let currentScanStream = null;
 let scanSessionCount = 0;
 let scanCooldown = new Map(); // code -> timestamp of last accepted scan
 const SCAN_COOLDOWN_MS = 1000;
@@ -2489,7 +2438,6 @@ let scannerPausedForUnknown = false;
 let pendingUnknownCode = null;
 let torchOn = false;
 let torchSupported = false;
-let scanMode = 'sell'; // 'sell' (add to cart) or 'restock' (add qty to inventory stock)
 
 function prependScanLog(text, qtyLabel) {
   const log = document.getElementById('scanLog');
@@ -2504,6 +2452,24 @@ function flashScanner() {
   const flash = document.getElementById('scanFlash');
   flash.classList.add('active');
   setTimeout(() => flash.classList.remove('active'), 150);
+}
+
+/* Beep played on a confirmed scan — same square-wave tone as the provided
+   advanced scanner. Respects the existing "Play a sound when an item is
+   added" setting, same as every other in-app sound. */
+function scanBeep() {
+  if (!state.settings.soundEnabled) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = 1500;
+    gain.gain.value = 0.15;
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    setTimeout(() => { osc.stop(); ctx.close(); }, 90);
+  } catch (e) {}
 }
 
 async function addScannedProductToCart(product) {
@@ -2528,56 +2494,8 @@ async function addScannedProductToCart(product) {
   }
   scanSessionCount++;
   document.getElementById('scanCountLabel').textContent = scanSessionCount + ' items added this session';
-  playItemAddedSound();
+  scanBeep();
   renderCart();
-}
-
-function setScanMode(mode) {
-  scanMode = mode;
-  const sellBtn = document.getElementById('scanModeSellBtn');
-  const restockBtn = document.getElementById('scanModeRestockBtn');
-  sellBtn.classList.toggle('btn-brand', mode === 'sell');
-  sellBtn.classList.toggle('btn-outline-secondary', mode !== 'sell');
-  restockBtn.classList.toggle('btn-brand', mode === 'restock');
-  restockBtn.classList.toggle('btn-outline-secondary', mode !== 'restock');
-  document.getElementById('scanQtyRow').classList.toggle('d-none', mode !== 'restock');
-}
-
-function wireScanModeToggle() {
-  document.getElementById('scanModeSellBtn').addEventListener('click', () => setScanMode('sell'));
-  document.getElementById('scanModeRestockBtn').addEventListener('click', () => setScanMode('restock'));
-}
-
-/* Adds the configured "qty to add per scan" straight onto a product's
-   tracked inventory stock — this is the "Add Stock" scan mode, separate
-   from the normal sale flow, for quickly recording a delivery/restock by
-   scanning each product instead of typing quantities by hand. Starts
-   tracking stock (from 0) if the product wasn't tracked before. */
-async function handleRestockScan(code, product) {
-  const qtyToAdd = Math.max(1, parseFloat(document.getElementById('scanRestockQty').value) || 1);
-
-  if (product) {
-    const newStock = (product.stock != null ? Number(product.stock) : 0) + qtyToAdd;
-    product.stock = newStock;
-    await storageSet('catalog', state.catalog);
-    renderCatalogDatalist();
-    renderInventoryTable();
-    scanSessionCount++;
-    document.getElementById('scanCountLabel').textContent = scanSessionCount + ' items added this session';
-    prependScanLog(product.name, '+' + qtyToAdd + ' (now ' + newStock + ')');
-    playItemAddedSound();
-  } else {
-    // Unknown barcode while restocking — pause for a name+price mini form,
-    // same as the sale flow, then create the product already stocked with
-    // the configured qty-per-scan.
-    scannerPausedForUnknown = true;
-    pendingUnknownCode = code;
-    document.getElementById('scanUnknownCode').textContent = code;
-    document.getElementById('scanUnknownName').value = '';
-    document.getElementById('scanUnknownPrice').value = '';
-    document.getElementById('scanUnknownBox').classList.remove('d-none');
-    document.getElementById('scanUnknownName').focus();
-  }
 }
 
 function handleScannedCode(code) {
@@ -2595,21 +2513,19 @@ function handleScannedCode(code) {
   // form, so the existing product is found instead of a fresh "unknown
   // code" prompt being shown for what is actually the same item.
   const product = findCatalogByBarcode(code);
-
-  if (scanMode === 'restock') {
-    handleRestockScan(code, product);
-    return;
-  }
-
   if (product) {
+    // Known product — add it to the current sale, exactly as before.
     addScannedProductToCart(product);
   } else {
-    // Pause and ask what this new code is — scanning resumes after save/skip.
+    // New code — pause and ask for Name, Price, and Qty. Saving this adds
+    // the product to INVENTORY (stock), never to the cart/receipt.
+    // Scanning resumes automatically after save/skip.
     scannerPausedForUnknown = true;
     pendingUnknownCode = code;
     document.getElementById('scanUnknownCode').textContent = code;
     document.getElementById('scanUnknownName').value = '';
     document.getElementById('scanUnknownPrice').value = '';
+    document.getElementById('scanUnknownQty').value = '';
     document.getElementById('scanUnknownBox').classList.remove('d-none');
     document.getElementById('scanUnknownName').focus();
   }
@@ -2619,23 +2535,21 @@ function wireUnknownScanForm() {
   document.getElementById('scanUnknownSaveBtn').addEventListener('click', async () => {
     const name = document.getElementById('scanUnknownName').value.trim();
     const price = parseFloat(document.getElementById('scanUnknownPrice').value);
+    const qtyVal = document.getElementById('scanUnknownQty').value;
+    const qty = qtyVal === '' ? null : Math.max(0, parseFloat(qtyVal) || 0);
     if (!name || isNaN(price) || price < 0) {
       showToast('Enter a product name and a valid price.');
       return;
     }
     // Store the exact code as scanned — this is the item's REAL barcode,
-    // never a generated/placeholder value.
-    if (scanMode === 'restock') {
-      const qtyToAdd = Math.max(1, parseFloat(document.getElementById('scanRestockQty').value) || 1);
-      const saved = await upsertCatalogFull({ name, price, barcode: pendingUnknownCode, stock: qtyToAdd });
-      scanSessionCount++;
-      document.getElementById('scanCountLabel').textContent = scanSessionCount + ' items added this session';
-      prependScanLog(saved.name, '+' + qtyToAdd + ' (now ' + saved.stock + ')');
-      playItemAddedSound();
-    } else {
-      await upsertCatalog(name, price, pendingUnknownCode);
-      await addScannedProductToCart({ name, price, barcode: pendingUnknownCode });
-    }
+    // never a generated/placeholder value. The Qty entered here only ever
+    // sets this product's INVENTORY stock — it never touches the current
+    // sale/cart/receipt.
+    const saved = await upsertCatalogFull({ name, price, barcode: pendingUnknownCode, stock: qty });
+    scanSessionCount++;
+    document.getElementById('scanCountLabel').textContent = scanSessionCount + ' items added this session';
+    prependScanLog(saved.name, saved.stock != null ? 'stock: ' + saved.stock : 'added');
+    scanBeep();
     closeUnknownScanBox();
   });
 
@@ -2650,16 +2564,118 @@ function closeUnknownScanBox() {
   pendingUnknownCode = null;
 }
 
-/* Detects torch (flashlight) support on the active camera track and shows
-   the toggle button only when the device actually supports it. */
+/* ---------- Accuracy safeguards (checksum + confirm-read) ---------- */
+function checksumValid(digits) {
+  if (!/^\d+$/.test(digits)) return true; // non-numeric formats (QR, Code128, etc.) skip this check
+  const len = digits.length;
+  if (len === 13 || len === 12) {
+    const body = len === 12 ? '0' + digits : digits; // UPC-A shares EAN-13's check algorithm
+    const arr = body.split('').map(Number);
+    let sum = 0;
+    for (let i = 0; i < 12; i++) sum += arr[i] * (i % 2 === 0 ? 1 : 3);
+    const check = (10 - (sum % 10)) % 10;
+    return check === arr[12];
+  }
+  if (len === 8) {
+    const arr = digits.split('').map(Number);
+    let sum = 0;
+    for (let i = 0; i < 7; i++) sum += arr[i] * (i % 2 === 0 ? 3 : 1);
+    const check = (10 - (sum % 10)) % 10;
+    return check === arr[7];
+  }
+  return true; // other numeric lengths: no standard check digit to validate
+}
+
+let pendingCode = null, pendingCount = 0;
+const CONFIRM_READS = 2;
+
+function processCandidate(text) {
+  if (!checksumValid(text)) {
+    // Failed checksum — almost certainly a misread. Reset and wait for a clean read.
+    pendingCode = null; pendingCount = 0;
+    return;
+  }
+  if (text === pendingCode) {
+    pendingCount++;
+  } else {
+    pendingCode = text;
+    pendingCount = 1;
+  }
+  if (pendingCount >= CONFIRM_READS) {
+    handleScannedCode(text.trim());
+    pendingCode = null; pendingCount = 0;
+  }
+}
+
+/* ---------- Native BarcodeDetector engine ---------- */
+async function nativeScanLoop() {
+  if (scannerPausedForUnknown) { scanRafId = requestAnimationFrame(nativeScanLoop); return; }
+  const video = document.getElementById('scannerVideoEl');
+  try {
+    if (video.readyState >= 2) {
+      const codes = await detector.detect(video);
+      if (codes.length > 0) processCandidate(codes[0].rawValue);
+    }
+  } catch (e) { /* skip this frame */ }
+  scanRafId = requestAnimationFrame(nativeScanLoop);
+}
+
+async function tryInitNative() {
+  if (!('BarcodeDetector' in window)) return false;
+  try {
+    const supported = await BarcodeDetector.getSupportedFormats();
+    const wanted = NATIVE_ALL_FORMATS.filter(f => supported.includes(f));
+    detector = new BarcodeDetector({ formats: wanted.length ? wanted : supported });
+    return true;
+  } catch (e) { return false; }
+}
+
+/* ---------- ZXing fallback engine (CDN-based) ---------- */
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Failed: ' + src));
+    document.head.appendChild(s);
+  });
+}
+
+async function tryInitZXing() {
+  for (const src of ZXING_SOURCES) {
+    try {
+      await loadScript(src);
+      if (typeof ZXing !== 'undefined') return true;
+    } catch (e) {}
+  }
+  return false;
+}
+
+/* Picks the scan engine once (cached across scanner opens) — native first,
+   ZXing as a CDN-loaded fallback for browsers without BarcodeDetector. */
+function ensureEngine() {
+  if (!engineReadyPromise) {
+    engineReadyPromise = (async () => {
+      if (await tryInitNative()) { scanEngine = 'native'; return true; }
+      if (await tryInitZXing()) { scanEngine = 'zxing'; return true; }
+      scanEngine = null;
+      return false;
+    })();
+  }
+  return engineReadyPromise;
+}
+
+/* ---------- Torch (flashlight) ---------- */
+function getActiveScanTrack() {
+  const track = currentScanStream?.getVideoTracks?.()[0];
+  return track || null;
+}
+
 async function detectTorchSupport() {
   const btn = document.getElementById('torchToggleBtn');
   try {
-    if (!qrScanner || typeof qrScanner.getRunningTrackCapabilities !== 'function') {
-      btn.classList.add('d-none');
-      return;
-    }
-    const capabilities = qrScanner.getRunningTrackCapabilities();
+    const track = getActiveScanTrack();
+    const capabilities = track && track.getCapabilities ? track.getCapabilities() : null;
     torchSupported = !!(capabilities && capabilities.torch);
     btn.classList.toggle('d-none', !torchSupported);
   } catch (e) {
@@ -2669,10 +2685,11 @@ async function detectTorchSupport() {
 }
 
 async function toggleTorch() {
-  if (!qrScanner || !torchSupported) return;
+  const track = getActiveScanTrack();
+  if (!track || !torchSupported) return;
   try {
     torchOn = !torchOn;
-    await qrScanner.applyVideoConstraints({ advanced: [{ torch: torchOn }] });
+    await track.applyConstraints({ advanced: [{ torch: torchOn }] });
     document.getElementById('torchToggleBtn').classList.toggle('active', torchOn);
   } catch (e) {
     console.warn('Could not toggle torch', e);
@@ -2685,65 +2702,63 @@ function wireTorchToggle() {
   document.getElementById('torchToggleBtn').addEventListener('click', toggleTorch);
 }
 
-function startScanner() {
-  if (typeof Html5Qrcode === 'undefined') {
-    showToast('Scanner library failed to load — check your internet connection.');
-    return;
-  }
+/* ---------- Start / stop ---------- */
+async function startScanner() {
   scanSessionCount = 0;
   scanCooldown.clear();
+  pendingCode = null; pendingCount = 0;
   torchOn = false;
   torchSupported = false;
   document.getElementById('scanLog').innerHTML = '';
   document.getElementById('scanCountLabel').textContent = '0 items added this session';
   document.getElementById('torchToggleBtn').classList.add('d-none');
   document.getElementById('torchToggleBtn').classList.remove('active');
-  document.getElementById('scanRestockQty').value = 1;
-  setScanMode('sell');
   closeUnknownScanBox();
 
-  qrScanner = new Html5Qrcode('scannerReader', {
-    formatsToSupport: [
-      Html5QrcodeSupportedFormats.QR_CODE,
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.UPC_A,
-      Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.CODE_128,
-      Html5QrcodeSupportedFormats.CODE_39,
-      Html5QrcodeSupportedFormats.ITF
-    ],
-    verbose: false
-  });
+  const ok = await ensureEngine();
+  if (!ok) {
+    showToast('No scanning engine could be loaded (unsupported browser and CDN fallback blocked). Check your internet connection.');
+    return;
+  }
 
-  qrScanner.start(
-    { facingMode: 'environment' },
-    {
-      fps: 20,
-      qrbox: { width: 280, height: 140 },
-      disableFlip: false,
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-      videoConstraints: {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
         facingMode: 'environment',
         width: { ideal: 1280 },
         height: { ideal: 720 }
       }
-    },
-    decodedText => handleScannedCode(decodedText.trim()),
-    () => { /* per-frame "not found" noise — ignored intentionally */ }
-  ).then(() => {
+    });
+    currentScanStream = stream;
+    const video = document.getElementById('scannerVideoEl');
+    video.srcObject = stream;
+    await video.play();
     detectTorchSupport();
-  }).catch(err => {
+
+    if (scanEngine === 'native') {
+      await tryInitNative(); // rebuild detector fresh for this session
+      scanRafId = requestAnimationFrame(nativeScanLoop);
+    } else if (scanEngine === 'zxing') {
+      const hints = new Map();
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      codeReader = new ZXing.BrowserMultiFormatReader(hints, 60);
+      codeReader.decodeFromVideoElement(video, (result) => {
+        if (result) processCandidate(result.getText());
+      });
+    }
+  } catch (err) {
     console.error(err);
     showToast('Could not access camera. Check camera permission for this site.');
-  });
+  }
 }
 
 function stopScanner() {
-  if (qrScanner) {
-    qrScanner.stop().then(() => qrScanner.clear()).catch(() => {});
-    qrScanner = null;
-  }
+  if (scanRafId) { cancelAnimationFrame(scanRafId); scanRafId = null; }
+  if (codeReader) { try { codeReader.reset(); } catch (e) {} codeReader = null; }
+  if (currentScanStream) { currentScanStream.getTracks().forEach(t => t.stop()); currentScanStream = null; }
+  const video = document.getElementById('scannerVideoEl');
+  if (video) video.srcObject = null;
+  pendingCode = null; pendingCount = 0;
   torchOn = false;
   torchSupported = false;
   closeUnknownScanBox();
@@ -2755,7 +2770,6 @@ function wireScannerModal() {
   modalEl.addEventListener('hidden.bs.modal', stopScanner);
   wireUnknownScanForm();
   wireTorchToggle();
-  wireScanModeToggle();
 }
 
 /* =========================================================
