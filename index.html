@@ -534,57 +534,7 @@
           No items yet — add a product above to get started.
         </div>
       </div>
-
-      <div class="builder-card">
-        <h6><i class="bi bi-percent"></i> Overall adjustments</h6>
-        <div class="row g-2">
-          <div class="col-6 col-sm-4">
-            <label class="form-label">Overall discount</label>
-            <div class="input-group">
-              <input type="number" id="overallDiscountValue" class="form-control" placeholder="0" min="0" step="0.01" value="0">
-              <select id="overallDiscountType" class="form-select" style="max-width:62px;">
-                <option value="percent">%</option>
-                <option value="fixed">Rs</option>
-              </select>
-            </div>
-          </div>
-          <div class="col-6 col-sm-4">
-            <label class="form-label">Tax / GST %</label>
-            <input type="number" id="taxPercent" class="form-control" placeholder="0" min="0" step="0.01" value="0">
-          </div>
-          <div class="col-12 col-sm-4 d-flex align-items-end">
-            <button class="btn btn-outline-secondary w-100" id="newSaleBtn"><i class="bi bi-arrow-counterclockwise"></i> New sale</button>
-          </div>
-        </div>
-
-        <div class="rc-dashed mt-3 pt-3">
-          <div class="d-flex justify-content-between small mb-1"><span class="rc-muted">Subtotal</span><span id="sumSubtotal">Rs0.00</span></div>
-          <div class="d-flex justify-content-between small mb-1"><span class="rc-muted">Discount</span><span id="sumDiscount">-Rs0.00</span></div>
-          <div class="d-flex justify-content-between small mb-1"><span class="rc-muted">Tax</span><span id="sumTax">Rs0.00</span></div>
-          <div class="d-flex justify-content-between fw-bold fs-5 mt-1"><span>Total</span><span id="sumTotal">Rs0.00</span></div>
-        </div>
-      </div>
-
-      <div class="builder-card">
-        <h6><i class="bi bi-cash-coin"></i> Cash received &amp; change</h6>
-        <div class="row g-2 align-items-end">
-          <div class="col-6">
-            <label class="form-label">Amount received from customer</label>
-            <input type="number" id="amountReceived" class="form-control" placeholder="e.g. 5000" min="0" step="0.01">
-          </div>
-          <div class="col-6">
-            <label class="form-label">Change to return</label>
-            <input type="text" id="changeDueDisplay" class="form-control fw-bold" value="Rs0.00" readonly tabindex="-1">
-          </div>
-        </div>
-        <p class="small rc-muted mt-2 mb-0" id="changeHint">
-          <i class="bi bi-info-circle"></i> Enter what the customer physically handed over (e.g. 5000) — the change due is calculated automatically and shown on the receipt.
-        </p>
-      </div>
-
-    </div>
-
-    <!-- ============ RIGHT: PREVIEW ============ -->
+ <!-- ============ RIGHT: PREVIEW ============ -->
     <div class="col-lg-5">
       <div class="sticky-col">
 
@@ -637,6 +587,53 @@
 
   </div>
 
+      <div class="builder-card">
+        <h6><i class="bi bi-percent"></i> Overall adjustments</h6>
+        <div class="row g-2">
+          <div class="col-6 col-sm-4">
+            <label class="form-label">Overall discount</label>
+            <div class="input-group">
+              <input type="number" id="overallDiscountValue" class="form-control" placeholder="0" min="0" step="0.01" value="0">
+              <select id="overallDiscountType" class="form-select" style="max-width:62px;">
+                <option value="percent">%</option>
+                <option value="fixed">Rs</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-6 col-sm-4">
+            <label class="form-label">Tax / GST %</label>
+            <input type="number" id="taxPercent" class="form-control" placeholder="0" min="0" step="0.01" value="0">
+          </div>
+          <div class="col-12 col-sm-4 d-flex align-items-end">
+            <button class="btn btn-outline-secondary w-100" id="newSaleBtn"><i class="bi bi-arrow-counterclockwise"></i> New sale</button>
+          </div>
+        </div>
+
+        <div class="rc-dashed mt-3 pt-3">
+          <div class="d-flex justify-content-between small mb-1"><span class="rc-muted">Subtotal</span><span id="sumSubtotal">Rs0.00</span></div>
+          <div class="d-flex justify-content-between small mb-1"><span class="rc-muted">Discount</span><span id="sumDiscount">-Rs0.00</span></div>
+          <div class="d-flex justify-content-between small mb-1"><span class="rc-muted">Tax</span><span id="sumTax">Rs0.00</span></div>
+          <div class="d-flex justify-content-between fw-bold fs-5 mt-1"><span>Total</span><span id="sumTotal">Rs0.00</span></div>
+        </div>
+      </div>
+
+      <div class="builder-card">
+        <h6><i class="bi bi-cash-coin"></i> Cash received &amp; change</h6>
+        <div class="row g-2 align-items-end">
+          <div class="col-6">
+            <label class="form-label">Amount received from customer</label>
+            <input type="number" id="amountReceived" class="form-control" placeholder="e.g. 5000" min="0" step="0.01">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Change to return</label>
+            <input type="text" id="changeDueDisplay" class="form-control fw-bold" value="Rs0.00" readonly tabindex="-1">
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+   
   <!-- ============ SALES DASHBOARD ============ -->
   <div class="builder-card sales-dash-card mt-3 mb-0">
     <div class="d-flex justify-content-between align-items-center mb-1">
