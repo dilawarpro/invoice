@@ -2822,17 +2822,26 @@ async function detectTorchSupport() {
       btn.classList.add('d-none');
       return;
     }
-    const capabilities = track.getCapabilities ? track.getCapabilities() : null;
-    torchSupported = !!(capabilities && capabilities.torch);
-    if (torchSupported) {
-      btn.classList.remove('d-none');
+    // Try to detect torch support using getCapabilities
+    if (track.getCapabilities) {
+      const capabilities = track.getCapabilities();
+      torchSupported = !!(capabilities && capabilities.torch);
+      if (torchSupported) {
+        btn.classList.remove('d-none');
+      } else {
+        btn.classList.add('d-none');
+      }
     } else {
-      btn.classList.add('d-none');
+      // Fallback: if getCapabilities is not available, show the button anyway
+      // so users on devices that might support torch can still try it
+      torchSupported = false; // conservative assumption
+      btn.classList.remove('d-none'); // but show it as a fallback
     }
   } catch (e) {
     console.warn('Could not detect torch support', e);
+    // On error, show button as fallback
     torchSupported = false;
-    btn.classList.add('d-none');
+    btn.classList.remove('d-none');
   }
 }
 
