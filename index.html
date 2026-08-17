@@ -310,9 +310,21 @@
   .torch-toggle-btn{
     position:absolute; top:10px; right:10px; z-index:5;
     background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.25); color:#fff;
-    border-radius:10px; padding:.35rem .6rem; font-size:.8rem;
+    border-radius:10px; width:38px; height:38px; padding:0;
+    display:flex; align-items:center; justify-content:center; font-size:1.05rem;
   }
   .torch-toggle-btn.active{ background:var(--amber); border-color:var(--amber); color:#1f2530; }
+
+  /* Scan target frame — a bordered, glowing box centered over the video
+     (matches the reference "green box with a glowing line" look) so users
+     have a clear area to line the barcode up in, instead of just a bare
+     video feed. The sweep line is confined inside this frame. */
+  .scan-target-frame{
+    position:absolute; left:10%; right:10%; top:32%; bottom:32%;
+    border:2px solid #22c55e; border-radius:16px;
+    box-shadow:0 0 14px 1px rgba(34,197,94,.55), inset 0 0 14px 1px rgba(34,197,94,.15);
+    pointer-events:none;
+  }
 
   /* Custom qty stepper — mobile browsers never render native number-input
      spin arrows (that's a desktop-only browser feature), so +/- buttons
@@ -320,13 +332,20 @@
      flex row (not Bootstrap's .input-group) with flex-wrap:nowrap so the
      buttons always stay left/right of the number, never stacking, even in
      a narrow column on mobile. Buttons and input share the same border/
-     background weight so neither looks more "washed out" than the other. */
+     background weight so neither looks more "washed out" than the other.
+
+     IMPORTANT: min-width:0 on the flex items + a smaller, shrinkable
+     min-width on the number input is what stops this from overflowing its
+     column on narrow phones (previously the input's 44px min-width plus
+     two 32px buttons didn't fit in the "Qty" column, so the "+" button
+     visually spilled into the "Price" field next to it). */
   .qty-stepper{
-    display:flex; flex-wrap:nowrap; align-items:stretch; gap:.35rem;
+    display:flex; flex-wrap:nowrap; align-items:stretch; gap:.25rem;
+    min-width:0;
   }
   .qty-stepper input[type="number"]{
-    flex:1 1 44px; min-width:44px; width:auto;
-    text-align:center; padding-left:.25rem; padding-right:.25rem;
+    flex:1 1 28px; min-width:0; width:auto;
+    text-align:center; padding-left:.2rem; padding-right:.2rem;
     font-size:1.05rem; font-weight:700; color:var(--ink);
     -moz-appearance:textfield;
   }
@@ -335,7 +354,7 @@
     -webkit-appearance:none; margin:0;
   }
   .qty-step-btn{
-    flex:0 0 auto; width:32px;
+    flex:0 0 auto; width:28px;
     display:flex; align-items:center; justify-content:center;
     font-weight:700; line-height:1; font-size:1rem;
     border-radius:999px !important;
@@ -345,15 +364,15 @@
   .qty-step-btn:active{ background:var(--accent); color:#fff; }
   #scannerModal .modal-content{ opacity:1; background:#fff; }
 
-  /* Realtime scanning animation — a simple sweeping line only, no dark
-     vignette/box-shadow this time (that box-shadow was what dimmed the
-     whole video and read as "low opacity" before). */
+  /* Realtime scanning animation — a simple sweeping line, confined inside
+     .scan-target-frame above, no dark vignette/box-shadow on the whole
+     video (that was what dimmed/read as "low opacity" before). */
   .scan-sweep-line{
-    position:absolute; left:6%; right:6%; height:2px;
-    background:#22c55e; box-shadow:0 0 6px 1px #22c55e;
-    animation:scanSweep 1.6s linear infinite; pointer-events:none;
+    position:absolute; left:12%; right:12%; height:2px;
+    background:#22c55e; box-shadow:0 0 8px 2px #22c55e;
+    animation:scanSweep 1.6s ease-in-out infinite; pointer-events:none;
   }
-  @keyframes scanSweep{ 0%{top:8%} 50%{top:92%} 100%{top:8%} }
+  @keyframes scanSweep{ 0%{top:34%} 50%{top:66%} 100%{top:34%} }
 
   /* ---------- Inventory ---------- */
   .inv-nav-btn{ position:relative; }
@@ -472,7 +491,7 @@
             <input type="text" id="itemName" class="form-control" list="catalogList" placeholder="e.g. Cold drink" required>
             <datalist id="catalogList"></datalist>
           </div>
-          <div class="col-4 col-sm-3">
+          <div class="col-5 col-sm-3">
             <label class="form-label">Qty</label>
             <div class="qty-stepper">
               <button type="button" class="btn qty-step-btn" id="itemQtyMinus">&minus;</button>
@@ -480,7 +499,7 @@
               <button type="button" class="btn qty-step-btn" id="itemQtyPlus">+</button>
             </div>
           </div>
-          <div class="col-8 col-sm-3">
+          <div class="col-7 col-sm-3">
             <label class="form-label">Price</label>
             <input type="number" id="itemPrice" class="form-control" placeholder="0.00" min="0" step="0.01" required>
           </div>
@@ -837,12 +856,13 @@
       <div class="modal-body">
         <div class="position-relative">
           <div id="scannerReader"><video id="scannerVideoEl" muted playsinline></video></div>
+          <div class="scan-target-frame"></div>
           <div class="scan-sweep-line"></div>
           <div class="scan-flash" id="scanFlash"></div>
-          <button type="button" class="torch-toggle-btn d-none" id="torchToggleBtn"><i class="bi bi-flashlight"></i> Flash</button>
+          <button type="button" class="torch-toggle-btn d-none" id="torchToggleBtn" title="Toggle flashlight" aria-label="Toggle flashlight"><i class="bi bi-flashlight"></i></button>
         </div>
         <p class="small rc-muted mt-2 mb-2">
-          <i class="bi bi-info-circle"></i> Point the camera at a product's barcode or QR code. A known item is added straight to the cart. A new code opens a quick form below to add it to your inventory. If it's dark, tap <strong>Flash</strong> to turn on the torch.
+          <i class="bi bi-info-circle"></i> Point the camera at a product's barcode or QR code inside the green box. A known item is added straight to the cart. A new code opens a quick form below to add it to your inventory. If it's dark, tap the torch icon to turn on the flashlight.
         </p>
 
         <div id="scanUnknownBox" class="d-none mb-2">
@@ -1262,6 +1282,17 @@ function showToast(msg) {
   bootstrap.Toast.getOrCreateInstance(toastEl, { delay: 2200 }).show();
 }
 
+/* Triggers a short device vibration for tactile "scan confirmed" feedback.
+   This works independently of the device's ringer/silent mode (silent mode
+   only mutes audio output, not the Vibration API), so it's used as the
+   reliable fallback/companion to the scan beep below. Not supported on iOS
+   Safari (no Vibration API there) — fails silently in that case. */
+function vibrateDevice(pattern) {
+  try {
+    if (navigator.vibrate) navigator.vibrate(pattern);
+  } catch (e) { /* no-op */ }
+}
+
 /* Short synthesized "item added" chime — built with the Web Audio API so no
    external sound file is needed and it still works offline. Respects the
    "Play a sound when an item is added" setting. */
@@ -1282,22 +1313,24 @@ function playItemAddedSound() {
   if (!state.settings.soundEnabled) return;
   try {
     if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
     const ctx = sharedAudioCtx;
-    const now = ctx.currentTime;
-
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, now);
-    osc.frequency.setValueAtTime(1175, now + 0.09);
-    gain.gain.setValueAtTime(0.001, now);
-    gain.gain.exponentialRampToValueAtTime(0.18, now + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.24);
+    const playTone = () => {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.setValueAtTime(1175, now + 0.09);
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.exponentialRampToValueAtTime(0.18, now + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.24);
+    };
+    if (ctx.state === 'suspended') ctx.resume().then(playTone).catch(() => {});
+    else playTone();
   } catch (e) {
     console.warn('Could not play sound', e);
   }
@@ -2499,6 +2532,12 @@ function fillSettingsForm() {
                        (never the cart/receipt), then scanning resumes.
    A short per-code cooldown still prevents the same barcode from being
    added twice if it stays in frame for a moment.
+
+   Feedback on every confirmed scan is now BOTH sound (scanBeep, subject to
+   the "Play a sound" setting) AND a device vibration (vibrateDevice, always
+   on — the Vibration API isn't affected by the ringer/silent switch, so it
+   still gives the shopkeeper a physical confirmation even with the phone
+   muted).
    ========================================================= */
 const NATIVE_ALL_FORMATS = ['qr_code','ean_13','ean_8','code_128','code_39','code_93','upc_a','upc_e','itf','codabar','data_matrix','pdf_417','aztec'];
 const ZXING_SOURCES = [
@@ -2539,26 +2578,32 @@ function flashScanner() {
 /* Beep played on a confirmed scan — same square-wave tone as the provided
    advanced scanner. Respects the existing "Play a sound when an item is
    added" setting, same as every other in-app sound.
-   IMPORTANT: reuses the shared AudioContext (see playItemAddedSound above)
-   and resumes it if suspended — a brand-new AudioContext created outside a
-   direct tap starts suspended on mobile browsers and stays silent unless
-   explicitly resumed, which is why this had no sound before. */
+   IMPORTANT: reuses the shared AudioContext (see playItemAddedSound above),
+   and — unlike before — actually WAITS for resume() to finish before
+   playing the tone when the context was suspended. Playing immediately
+   after calling resume() (without waiting on the returned promise) meant
+   the oscillator was often started while the context was still suspended
+   and produced no audible sound at all, which is why the scan beep looked
+   "wired up" in the code but stayed silent on many phones. */
 function scanBeep() {
   if (!state.settings.soundEnabled) return;
   try {
     if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
     const ctx = sharedAudioCtx;
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(1500, now);
-    gain.gain.setValueAtTime(0.15, now);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.09);
+    const playTone = () => {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(1500, now);
+      gain.gain.setValueAtTime(0.15, now);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.09);
+    };
+    if (ctx.state === 'suspended') ctx.resume().then(playTone).catch(() => {});
+    else playTone();
   } catch (e) {
     console.warn('Could not play scan beep', e);
   }
@@ -2587,6 +2632,7 @@ async function addScannedProductToCart(product) {
   scanSessionCount++;
   document.getElementById('scanCountLabel').textContent = scanSessionCount + ' items added this session';
   scanBeep();
+  vibrateDevice(60);
   renderCart();
 }
 
@@ -2599,6 +2645,7 @@ function handleScannedCode(code) {
   scanCooldown.set(normKey, Date.now());
 
   flashScanner();
+  vibrateDevice(40); // immediate tactile confirmation the code was read, even before lookup finishes
 
   // Look up using the SAME real barcode string every time this physical
   // code is scanned — findCatalogByBarcode compares on the normalized
@@ -2644,6 +2691,7 @@ function wireUnknownScanForm() {
     document.getElementById('scanCountLabel').textContent = scanSessionCount + ' items added this session';
     prependScanLog(saved.name, saved.stock != null ? 'stock: ' + saved.stock : 'added');
     scanBeep();
+    vibrateDevice(60);
     closeUnknownScanBox();
   });
 
@@ -2784,7 +2832,10 @@ async function toggleTorch() {
   try {
     torchOn = !torchOn;
     await track.applyConstraints({ advanced: [{ torch: torchOn }] });
-    document.getElementById('torchToggleBtn').classList.toggle('active', torchOn);
+    const btn = document.getElementById('torchToggleBtn');
+    btn.classList.toggle('active', torchOn);
+    const icon = btn.querySelector('i');
+    if (icon) icon.className = torchOn ? 'bi bi-flashlight-fill' : 'bi bi-flashlight';
   } catch (e) {
     console.warn('Could not toggle torch', e);
     torchOn = !torchOn; // revert
@@ -2805,8 +2856,11 @@ async function startScanner() {
   torchSupported = false;
   document.getElementById('scanLog').innerHTML = '';
   document.getElementById('scanCountLabel').textContent = '0 items added this session';
-  document.getElementById('torchToggleBtn').classList.add('d-none');
-  document.getElementById('torchToggleBtn').classList.remove('active');
+  const torchBtn = document.getElementById('torchToggleBtn');
+  torchBtn.classList.add('d-none');
+  torchBtn.classList.remove('active');
+  const torchIcon = torchBtn.querySelector('i');
+  if (torchIcon) torchIcon.className = 'bi bi-flashlight';
   closeUnknownScanBox();
 
   // Unlock the shared audio context again here as a second attempt (the
