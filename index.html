@@ -281,10 +281,14 @@
 
   /* ---------- Barcode / QR scanner ---------- */
   #scannerReader{
+    position:relative;
     width:100%; border-radius:12px; overflow:hidden; background:#000;
-    min-height:260px;
+    aspect-ratio: 4 / 3;
+    max-height:min(60vh, 420px);
   }
-  #scannerReader video{ border-radius:12px; }
+  #scannerReader video{
+    display:block; width:100%; height:100%; object-fit:cover; border-radius:12px;
+  }
   .scan-flash{
     position:absolute; inset:0; background:rgba(31,157,85,.35);
     opacity:0; pointer-events:none; transition:opacity .15s;
@@ -309,6 +313,21 @@
     border-radius:10px; padding:.35rem .6rem; font-size:.8rem;
   }
   .torch-toggle-btn.active{ background:var(--amber); border-color:var(--amber); color:#1f2530; }
+
+  /* Custom qty stepper — mobile browsers never render native number-input
+     spin arrows (that's a desktop-only browser feature), so +/- buttons
+     are needed for tap-to-adjust quantity on a phone. */
+  .qty-stepper{ display:flex; }
+  .qty-stepper input[type="number"]{
+    -moz-appearance:textfield;
+  }
+  .qty-stepper input[type="number"]::-webkit-inner-spin-button,
+  .qty-stepper input[type="number"]::-webkit-outer-spin-button{
+    -webkit-appearance:none; margin:0;
+  }
+  .qty-step-btn{
+    flex:0 0 auto; width:38px; font-weight:700; line-height:1;
+  }
 
   /* Realtime scanning animation (from the advanced scanner) */
   .reticle{
@@ -445,7 +464,11 @@
           </div>
           <div class="col-4 col-sm-3">
             <label class="form-label">Qty</label>
-            <input type="number" id="itemQty" class="form-control" value="1" min="1" step="1" required>
+            <div class="input-group qty-stepper">
+              <button type="button" class="btn btn-outline-secondary qty-step-btn" id="itemQtyMinus">&minus;</button>
+              <input type="number" id="itemQty" class="form-control text-center" value="1" min="1" step="1" required>
+              <button type="button" class="btn btn-outline-secondary qty-step-btn" id="itemQtyPlus">+</button>
+            </div>
           </div>
           <div class="col-8 col-sm-3">
             <label class="form-label">Price</label>
@@ -748,7 +771,11 @@
           </div>
           <div class="col-6 col-sm-2">
             <label class="form-label">Qty</label>
-            <input type="number" id="invStock" class="form-control form-control-sm" min="0" step="1" placeholder="untracked">
+            <div class="input-group input-group-sm qty-stepper">
+              <button type="button" class="btn btn-outline-secondary qty-step-btn" id="invStockMinus">&minus;</button>
+              <input type="number" id="invStock" class="form-control text-center" min="0" step="1" placeholder="untracked">
+              <button type="button" class="btn btn-outline-secondary qty-step-btn" id="invStockPlus">+</button>
+            </div>
           </div>
           <div class="col-6 col-sm-3">
             <label class="form-label">Barcode (optional)</label>
@@ -819,7 +846,11 @@
               <input type="number" id="scanUnknownPrice" class="form-control form-control-sm" placeholder="Price" min="0" step="0.01">
             </div>
             <div class="col-6">
-              <input type="number" id="scanUnknownQty" class="form-control form-control-sm" placeholder="Qty" min="0" step="1">
+              <div class="input-group input-group-sm qty-stepper">
+                <button type="button" class="btn btn-outline-secondary qty-step-btn" id="scanUnknownQtyMinus">&minus;</button>
+                <input type="number" id="scanUnknownQty" class="form-control text-center" placeholder="Qty" min="0" step="1">
+                <button type="button" class="btn btn-outline-secondary qty-step-btn" id="scanUnknownQtyPlus">+</button>
+              </div>
             </div>
           </div>
           <div class="d-flex gap-2 mt-2">
@@ -1127,6 +1158,31 @@ function escapeHtml(str) {
 
 function uid() {
   return 'it_' + Math.random().toString(36).slice(2, 10);
+}
+
+/* Wires a pair of +/- buttons to a number input. Needed because mobile
+   browsers never render native number-input spin arrows (desktop-only
+   browser feature) — these buttons are the tap-to-adjust equivalent that
+   works on any device. Blank input is treated as 0 for stepping purposes. */
+function wireQtyStepper(inputId, minusId, plusId, min) {
+  const input = document.getElementById(inputId);
+  const minusBtn = document.getElementById(minusId);
+  const plusBtn = document.getElementById(plusId);
+  const floor = min != null ? min : 0;
+
+  minusBtn.addEventListener('click', () => {
+    const cur = parseFloat(input.value);
+    const next = Math.max(floor, (isNaN(cur) ? floor : cur) - 1);
+    input.value = next;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+  plusBtn.addEventListener('click', () => {
+    const cur = parseFloat(input.value);
+    const next = (isNaN(cur) ? floor : cur) + 1;
+    input.value = next;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
 }
 
 function fmt(n) {
@@ -1833,6 +1889,8 @@ function exportInventoryCsv() {
 }
 
 function wireInventoryModal() {
+  wireQtyStepper('invStock', 'invStockMinus', 'invStockPlus', 0);
+
   const modalEl = document.getElementById('inventoryModal');
   modalEl.addEventListener('show.bs.modal', () => {
     hideInvAddForm();
@@ -1963,6 +2021,8 @@ function renderHistory() {
    EVENT WIRING
    ========================================================= */
 function wireAddItemForm() {
+  wireQtyStepper('itemQty', 'itemQtyMinus', 'itemQtyPlus', 1);
+
   document.getElementById('addItemForm').addEventListener('submit', async e => {
     e.preventDefault();
     const name = document.getElementById('itemName').value.trim();
@@ -2532,6 +2592,8 @@ function handleScannedCode(code) {
 }
 
 function wireUnknownScanForm() {
+  wireQtyStepper('scanUnknownQty', 'scanUnknownQtyMinus', 'scanUnknownQtyPlus', 0);
+
   document.getElementById('scanUnknownSaveBtn').addEventListener('click', async () => {
     const name = document.getElementById('scanUnknownName').value.trim();
     const price = parseFloat(document.getElementById('scanUnknownPrice').value);
