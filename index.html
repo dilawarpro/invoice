@@ -858,10 +858,10 @@
           <div class="scan-target-frame"></div>
           <div class="scan-sweep-line"></div>
           <div class="scan-flash" id="scanFlash"></div>
-          <button type="button" class="torch-toggle-btn d-none" id="torchToggleBtn" title="Toggle flashlight" aria-label="Toggle flashlight"><i class="bi bi-flashlight"></i></button>
+          <button type="button" class="torch-toggle-btn" id="torchToggleBtn" title="Toggle flashlight" aria-label="Toggle flashlight"><i class="bi bi-flashlight"></i> Torch</button>
         </div>
         <p class="small rc-muted mt-2 mb-2">
-          <i class="bi bi-info-circle"></i> Point the camera at a product's barcode or QR code inside the green box. A known item is added straight to the cart. A new code opens a quick form below to add it to your inventory. If it's dark, tap the torch icon to turn on the flashlight.
+          <i class="bi bi-info-circle"></i> Point the camera at a product's barcode or QR code inside the green box. A known item is added straight to the cart.
         </p>
 
         <div id="scanUnknownBox" class="d-none mb-2">
@@ -877,7 +877,7 @@
             <div class="col-6">
               <div class="qty-stepper">
                 <button type="button" class="btn qty-step-btn" id="scanUnknownQtyMinus">&minus;</button>
-                <input type="number" id="scanUnknownQty" class="form-control form-control-sm" placeholder="Qty" min="0" step="1">
+                <input type="number" id="scanUnknownQty" class="form-control form-control-sm" value="1" min="0" step="1">
                 <button type="button" class="btn qty-step-btn" id="scanUnknownQtyPlus">+</button>
               </div>
             </div>
@@ -2814,12 +2814,23 @@ function getActiveScanTrack() {
 
 async function detectTorchSupport() {
   const btn = document.getElementById('torchToggleBtn');
+  if (!btn) return;
   try {
     const track = getActiveScanTrack();
-    const capabilities = track && track.getCapabilities ? track.getCapabilities() : null;
+    if (!track) {
+      torchSupported = false;
+      btn.classList.add('d-none');
+      return;
+    }
+    const capabilities = track.getCapabilities ? track.getCapabilities() : null;
     torchSupported = !!(capabilities && capabilities.torch);
-    btn.classList.toggle('d-none', !torchSupported);
+    if (torchSupported) {
+      btn.classList.remove('d-none');
+    } else {
+      btn.classList.add('d-none');
+    }
   } catch (e) {
+    console.warn('Could not detect torch support', e);
     torchSupported = false;
     btn.classList.add('d-none');
   }
