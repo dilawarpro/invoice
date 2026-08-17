@@ -1327,24 +1327,26 @@ function showToast(msg) {
    This works independently of the device's ringer/silent mode (silent mode
    only mutes audio output, not the Vibration API), so it's used as the
    reliable fallback/companion to the scan beep below. Not supported on iOS
-   Safari (no Vibration API there) — fails silently in that case. */
+   Safari (no Vibration API there) — fails silently in that case.
+
+   BUG FIX: previously this only tried navigator.vibrate and swallowed the
+   return value, so a browser-level rejection (blocked by a permissions
+   policy, document not focused, no user-activation, etc.) looked exactly
+   like a success — impossible to diagnose. Now it also checks vendor-
+   prefixed fallbacks and returns whether the call was actually accepted,
+   so callers/console logs can tell the difference. */
 function vibrateDevice(pattern) {
-  const isSecureOrigin = window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-  const api = navigator?.vibrate ?? navigator?.webkitVibrate ?? navigator?.mozVibrate;
-
-  if (!isSecureOrigin) {
-    console.warn('Vibration blocked: this page is not running from a secure origin (HTTPS/localhost). Use http://localhost or HTTPS for haptics.');
-    return false;
-  }
-
-  if (typeof api !== 'function') {
-    console.warn('Vibration API unavailable on this browser/device.');
-    return false;
-  }
-
   try {
-    api.call(navigator, pattern);
-    return true;
+    const vibrateFn = navigator.vibrate || navigator.webkitVibrate || navigator.mozVibrate;
+    if (!vibrateFn) {
+      console.debug('Vibration API not available on this device/browser.');
+      return false;
+    }
+    const accepted = vibrateFn.call(navigator, pattern);
+    if (accepted === false) {
+      console.debug('Vibration request was rejected by the browser (no focus/user-activation, or blocked by policy).');
+    }
+    return accepted;
   } catch (e) {
     console.debug('Vibration not available:', e);
     return false;
@@ -2579,9 +2581,9 @@ function fillSettingsForm() {
      2. The SAME code must be read on two consecutive frames before it's
         accepted, instead of trusting any single frame.
    Only once a code clears both does it reach handleScannedCode() below,
-   which is unchanged from before: every recognized code is looked up in
-   the product catalog by its linked barcode (via findCatalogByBarcode,
-   matching on a NORMALIZED code — see normalizeBarcode above):
+   which looks up the code in the product catalog by its linked barcode
+   (via findCatalogByBarcode, matching on a NORMALIZED code — see
+   normalizeBarcode above):
      - Known code  -> instantly added to the cart (or its qty bumped by 1
                        if that exact barcode is already in the cart), and
                        scanning KEEPS RUNNING for the next product.
@@ -2591,11 +2593,18 @@ function fillSettingsForm() {
    A short per-code cooldown still prevents the same barcode from being
    added twice if it stays in frame for a moment.
 
-   Feedback on every confirmed scan is now BOTH sound (scanBeep, subject to
-   the "Play a sound" setting) AND a device vibration (vibrateDevice, always
-   on — the Vibration API isn't affected by the ringer/silent switch, so it
-   still gives the shopkeeper a physical confirmation even with the phone
-   muted).
+   VIBRATION BUG FIX: previously handleScannedCode() fired vibrateDevice([30])
+   immediately, and then — for a known product — addScannedProductToCart()
+   fired a SECOND vibrateDevice([50,30,50]) in the very same synchronous
+   tick (no await in between). navigator.vibrate() cancels any in-progress
+   pattern the instant a new one is requested, so the first short pulse was
+   almost always killed before the device could actually buzz, which is why
+   vibration looked "random"/inconsistent on scans. Fixed by removing the
+   redundant early call and firing exactly ONE vibration per scan event —
+   from addScannedProductToCart() for known items (bump-or-add), and from
+   handleScannedCode() itself only on the unknown-code branch (where nothing
+   else vibrates afterwards). Sound (scanBeep) is unaffected by this bug
+   since it already only fired once per path.
    ========================================================= */
 const NATIVE_ALL_FORMATS = ['qr_code','ean_13','ean_8','code_128','code_39','code_93','upc_a','upc_e','itf','codabar','data_matrix','pdf_417','aztec'];
 const ZXING_SOURCES = [
@@ -2636,13 +2645,13 @@ function flashScanner() {
 /* Beep played on a confirmed scan — same square-wave tone as the provided
    advanced scanner. Respects the existing "Play a sound when an item is
    added" setting, same as every other in-app sound.
-   IMPORTANT: reuses the shared AudioContext (see playItemAddedSound above),
-   and — unlike before — actually WAITS for resume() to finish before
-   playing the tone when the context was suspended. Playing immediately
-   after calling resume() (without waiting on the returned promise) meant
-   the oscillator was often started while the context was still suspended
-   and produced no audible sound at all, which is why the scan beep looked
-   "wired up" in the code but stayed silent on many phones. */
+   Reuses the shared AudioContext (see playItemAddedSound above), and
+   correctly WAITS for resume() to finish before playing the tone when the
+   context was suspended. Playing immediately after calling resume()
+   (without waiting on the returned promise) meant the oscillator was often
+   started while the context was still suspended and produced no audible
+   sound at all, which is why the scan beep looked "wired up" in the code
+   but stayed silent on many phones. */
 function scanBeep() {
   if (!state.settings.soundEnabled) return;
   try {
@@ -2690,6 +2699,10 @@ async function addScannedProductToCart(product) {
   scanSessionCount++;
   document.getElementById('scanCountLabel').textContent = scanSessionCount + ' items added this session';
   scanBeep();
+  // Single vibration per confirmed add — see the fix note above the
+  // scanner section for why this used to be cancelled by a second,
+  // redundant call in handleScannedCode().
+  vibrateDevice([50, 30, 50]); // double-tap vibration pattern for successful add
   renderCart();
 }
 
@@ -2702,7 +2715,13 @@ function handleScannedCode(code) {
   scanCooldown.set(normKey, Date.now());
 
   flashScanner();
-  vibrateDevice([35]); // one short pulse per accepted scan; avoids duplicate calls getting coalesced by the browser
+  // NOTE: no vibrateDevice() call here anymore. It used to fire a [30]ms
+  // "detected" pulse right at this point, but that ran in the same
+  // synchronous tick as addScannedProductToCart()'s own vibrate call below
+  // (for known products) — and navigator.vibrate() cancels/replaces any
+  // in-progress pattern, so the two calls were fighting each other and the
+  // device often didn't buzz at all. Each path below now fires exactly one
+  // vibration, so it's reliable every time.
 
   // Look up using the SAME real barcode string every time this physical
   // code is scanned — findCatalogByBarcode compares on the normalized
@@ -2710,7 +2729,8 @@ function handleScannedCode(code) {
   // code" prompt being shown for what is actually the same item.
   const product = findCatalogByBarcode(code);
   if (product) {
-    // Known product — add it to the current sale, exactly as before.
+    // Known product — add it to the current sale. Vibrates once, inside
+    // addScannedProductToCart().
     addScannedProductToCart(product);
   } else {
     // New code — pause and ask for Name, Price, and Qty. Saving this adds
@@ -2724,6 +2744,9 @@ function handleScannedCode(code) {
     document.getElementById('scanUnknownQty').value = '';
     document.getElementById('scanUnknownBox').classList.remove('d-none');
     document.getElementById('scanUnknownName').focus();
+    // Single short pulse here to flag "needs your attention" — nothing
+    // else in this branch will vibrate afterwards, so no race.
+    vibrateDevice([30]);
   }
 }
 
@@ -2748,6 +2771,7 @@ function wireUnknownScanForm() {
     document.getElementById('scanCountLabel').textContent = scanSessionCount + ' items added this session';
     prependScanLog(saved.name, saved.stock != null ? 'stock: ' + saved.stock : 'added');
     scanBeep();
+    vibrateDevice([50, 30, 50]); // double-tap vibration for unknown code saved
     closeUnknownScanBox();
   });
 
