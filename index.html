@@ -322,11 +322,12 @@
      a narrow column on mobile. Buttons and input share the same border/
      background weight so neither looks more "washed out" than the other. */
   .qty-stepper{
-    display:flex; flex-wrap:nowrap; align-items:stretch; gap:.4rem;
+    display:flex; flex-wrap:nowrap; align-items:stretch; gap:.35rem;
   }
   .qty-stepper input[type="number"]{
-    flex:1 1 auto; min-width:0; width:auto;
-    text-align:center;
+    flex:1 1 44px; min-width:44px; width:auto;
+    text-align:center; padding-left:.25rem; padding-right:.25rem;
+    font-size:1.05rem; font-weight:700; color:var(--ink);
     -moz-appearance:textfield;
   }
   .qty-stepper input[type="number"]::-webkit-inner-spin-button,
@@ -334,7 +335,7 @@
     -webkit-appearance:none; margin:0;
   }
   .qty-step-btn{
-    flex:0 0 auto; width:36px;
+    flex:0 0 auto; width:32px;
     display:flex; align-items:center; justify-content:center;
     font-weight:700; line-height:1; font-size:1rem;
     border-radius:999px !important;
@@ -343,6 +344,16 @@
   .qty-step-btn:hover, .qty-step-btn:focus{ background:var(--accent-soft); color:var(--accent-dark); }
   .qty-step-btn:active{ background:var(--accent); color:#fff; }
   #scannerModal .modal-content{ opacity:1; background:#fff; }
+
+  /* Realtime scanning animation — a simple sweeping line only, no dark
+     vignette/box-shadow this time (that box-shadow was what dimmed the
+     whole video and read as "low opacity" before). */
+  .scan-sweep-line{
+    position:absolute; left:6%; right:6%; height:2px;
+    background:#22c55e; box-shadow:0 0 6px 1px #22c55e;
+    animation:scanSweep 1.6s linear infinite; pointer-events:none;
+  }
+  @keyframes scanSweep{ 0%{top:8%} 50%{top:92%} 100%{top:8%} }
 
   /* ---------- Inventory ---------- */
   .inv-nav-btn{ position:relative; }
@@ -826,6 +837,7 @@
       <div class="modal-body">
         <div class="position-relative">
           <div id="scannerReader"><video id="scannerVideoEl" muted playsinline></video></div>
+          <div class="scan-sweep-line"></div>
           <div class="scan-flash" id="scanFlash"></div>
           <button type="button" class="torch-toggle-btn d-none" id="torchToggleBtn"><i class="bi bi-flashlight"></i> Flash</button>
         </div>
@@ -1254,6 +1266,18 @@ function showToast(msg) {
    external sound file is needed and it still works offline. Respects the
    "Play a sound when an item is added" setting. */
 let sharedAudioCtx = null;
+
+/* Creates/resumes the shared audio context. Called directly from the tap
+   that opens the scanner — the earliest possible point in the gesture —
+   because some mobile browsers only allow unlocking audio when the resume
+   call happens as close to the actual tap as possible. */
+function unlockAudioContext() {
+  try {
+    if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
+  } catch (e) {}
+}
+
 function playItemAddedSound() {
   if (!state.settings.soundEnabled) return;
   try {
@@ -2785,13 +2809,9 @@ async function startScanner() {
   document.getElementById('torchToggleBtn').classList.remove('active');
   closeUnknownScanBox();
 
-  // Unlock the shared audio context now, while this call is still close to
-  // the tap that opened the modal, so the beep isn't silently blocked when
-  // it's first triggered later from an async scan callback.
-  try {
-    if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
-  } catch (e) {}
+  // Unlock the shared audio context again here as a second attempt (the
+  // first happens immediately on the button tap, see openScannerBtn above).
+  unlockAudioContext();
 
   const ok = await ensureEngine();
   if (!ok) {
@@ -3101,6 +3121,7 @@ async function init() {
   wireDashboardToggle();
   wireScannerModal();
   wireInventoryModal();
+  document.getElementById('openScannerBtn').addEventListener('click', unlockAudioContext);
 
   // Keep daily/weekly/monthly totals current even if the app is left open
   // across a midnight/week/month rollover without a new sale being saved.
