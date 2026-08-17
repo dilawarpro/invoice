@@ -913,6 +913,48 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<!-- Preventing code js started -->
+<script>
+  // Disable right-click context menu
+document.addEventListener('contextmenu', function (e) {
+  e.preventDefault();
+});
+
+// Disable common dev-tools / view-source shortcuts
+document.addEventListener('keydown', function (e) {
+  const key = e.key.toUpperCase();
+
+  // F12
+  if (e.key === 'F12') {
+    e.preventDefault();
+  }
+
+  // Ctrl+Shift+I (DevTools)
+  if (e.ctrlKey && e.shiftKey && key === 'I') {
+    e.preventDefault();
+  }
+
+  // Ctrl+Shift+J (Console)
+  if (e.ctrlKey && e.shiftKey && key === 'J') {
+    e.preventDefault();
+  }
+
+  // Ctrl+Shift+C (Inspect element)
+  if (e.ctrlKey && e.shiftKey && key === 'C') {
+    e.preventDefault();
+  }
+
+  // Ctrl+Shift+U / Ctrl+U (View source)
+  if ((e.ctrlKey && e.shiftKey && key === 'U') || (e.ctrlKey && key === 'U')) {
+    e.preventDefault();
+  }
+});
+</script>
+
+<!-- Preventing code js Ended -->
+
+
 <script>
 'use strict';
 
