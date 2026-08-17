@@ -1330,16 +1330,15 @@ function showToast(msg) {
    Safari (no Vibration API there) — fails silently in that case. */
 function vibrateDevice(pattern) {
   try {
-    if (navigator.vibrate) {
-      navigator.vibrate(pattern);
-    } else if (navigator.webkitVibrate) {
-      navigator.webkitVibrate(pattern);
-    } else if (navigator.mozVibrate) {
-      navigator.mozVibrate(pattern);
+    const api = navigator?.vibrate ?? navigator?.webkitVibrate ?? navigator?.mozVibrate;
+    if (typeof api === 'function') {
+      api.call(navigator, pattern);
+      return true;
     }
   } catch (e) {
     console.debug('Vibration not available:', e);
   }
+  return false;
 }
 
 /* Short synthesized "item added" chime — built with the Web Audio API so no
@@ -2681,7 +2680,6 @@ async function addScannedProductToCart(product) {
   scanSessionCount++;
   document.getElementById('scanCountLabel').textContent = scanSessionCount + ' items added this session';
   scanBeep();
-  vibrateDevice([50, 30, 50]); // double-tap vibration pattern for successful add
   renderCart();
 }
 
@@ -2694,7 +2692,7 @@ function handleScannedCode(code) {
   scanCooldown.set(normKey, Date.now());
 
   flashScanner();
-  vibrateDevice([30]); // quick tap when barcode is first detected
+  vibrateDevice([35]); // one short pulse per accepted scan; avoids duplicate calls getting coalesced by the browser
 
   // Look up using the SAME real barcode string every time this physical
   // code is scanned — findCatalogByBarcode compares on the normalized
@@ -2740,7 +2738,6 @@ function wireUnknownScanForm() {
     document.getElementById('scanCountLabel').textContent = scanSessionCount + ' items added this session';
     prependScanLog(saved.name, saved.stock != null ? 'stock: ' + saved.stock : 'added');
     scanBeep();
-    vibrateDevice([50, 30, 50]); // double-tap vibration for unknown code saved
     closeUnknownScanBox();
   });
 
