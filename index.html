@@ -1329,16 +1329,26 @@ function showToast(msg) {
    reliable fallback/companion to the scan beep below. Not supported on iOS
    Safari (no Vibration API there) — fails silently in that case. */
 function vibrateDevice(pattern) {
+  const isSecureOrigin = window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  const api = navigator?.vibrate ?? navigator?.webkitVibrate ?? navigator?.mozVibrate;
+
+  if (!isSecureOrigin) {
+    console.warn('Vibration blocked: this page is not running from a secure origin (HTTPS/localhost). Use http://localhost or HTTPS for haptics.');
+    return false;
+  }
+
+  if (typeof api !== 'function') {
+    console.warn('Vibration API unavailable on this browser/device.');
+    return false;
+  }
+
   try {
-    const api = navigator?.vibrate ?? navigator?.webkitVibrate ?? navigator?.mozVibrate;
-    if (typeof api === 'function') {
-      api.call(navigator, pattern);
-      return true;
-    }
+    api.call(navigator, pattern);
+    return true;
   } catch (e) {
     console.debug('Vibration not available:', e);
+    return false;
   }
-  return false;
 }
 
 /* Short synthesized "item added" chime — built with the Web Audio API so no
