@@ -1,0 +1,3223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DukanSlip — Invoice & Receipt Builder</title>
+<link rel="shortcut icon" href="dukanslip.png" type="image/x-icon">
+<link rel="manifest" href="manifest.json">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --ink:#1f2530;
+    --ink-soft:#5b6472;
+    --workspace:#eef1f4;
+    --paper:#fffdf8;
+    --accent:#0e7c7b;
+    --accent-dark:#0a5f5e;
+    --accent-soft:#e4f4f3;
+    --amber:#dc9a2e;
+    --amber-soft:#fbf0db;
+    --danger:#d9483f;
+    --good:#1f9d55;
+    --line:#dfe3e8;
+    --radius:14px;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--workspace);
+    color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    min-height:100vh;
+  }
+  h1,h2,h3,h4,h5,.brand-font{ font-family:'Sora',system-ui,sans-serif; }
+
+  /* ---------- Navbar ---------- */
+  .app-navbar{
+    background:var(--ink);
+    color:#fff;
+    padding:.85rem 1.25rem;
+  }
+  .app-navbar .brand{
+    font-family:'Sora',sans-serif;
+    font-weight:700;
+    font-size:1.25rem;
+    letter-spacing:.2px;
+  }
+  .app-navbar .brand .dot{ color:var(--amber); }
+  .nav-icon-btn{
+    background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.12);
+    color:#fff;
+    border-radius:10px;
+    padding:.4rem .7rem;
+    font-size:.85rem;
+  }
+  .nav-icon-btn:hover{ background:rgba(255,255,255,.16); color:#fff; }
+  .bt-pill{
+    font-size:.72rem;
+    padding:.3rem .6rem;
+    border-radius:999px;
+    background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.15);
+    display:inline-flex;
+    align-items:center;
+    gap:.35rem;
+  }
+  .bt-pill .dot-status{ width:7px; height:7px; border-radius:50%; background:#7b8595; display:inline-block; }
+  .bt-pill.connected .dot-status{ background:var(--good); box-shadow:0 0 0 3px rgba(31,157,85,.25); }
+
+  /* ---------- Cards / layout ---------- */
+  .builder-card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:1.1rem 1.2rem;
+    margin-bottom:1rem;
+  }
+  .builder-card h6{
+    font-family:'Sora',sans-serif;
+    font-weight:600;
+    font-size:.78rem;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    color:var(--ink-soft);
+    margin-bottom:.9rem;
+    display:flex;
+    align-items:center;
+    gap:.45rem;
+  }
+  .builder-card h6 i{ color:var(--accent); }
+
+  .form-control,.form-select{
+    border-color:var(--line);
+    font-size:.92rem;
+  }
+  .form-control:focus,.form-select:focus{
+    border-color:var(--accent);
+    box-shadow:0 0 0 .2rem var(--accent-soft);
+  }
+  label.form-label{ font-size:.78rem; font-weight:600; color:var(--ink-soft); }
+
+  .btn-brand{ background:var(--accent); border:1px solid var(--accent); color:#fff; font-weight:600; }
+  .btn-brand:hover{ background:var(--accent-dark); border-color:var(--accent-dark); color:#fff; }
+  .btn-outline-brand{ border:1px solid var(--accent); color:var(--accent); font-weight:600; background:transparent; }
+  .btn-outline-brand:hover{ background:var(--accent); color:#fff; }
+  .btn-amber{ background:var(--amber); border:1px solid var(--amber); color:#fff; font-weight:600; }
+  .btn-amber:hover{ background:#c2861f; border-color:#c2861f; color:#fff; }
+
+  /* ---------- Cart table ---------- */
+  .cart-table{ font-size:.88rem; }
+  .cart-table th{
+    font-size:.7rem; text-transform:uppercase; letter-spacing:.05em;
+    color:var(--ink-soft); border-bottom:1px solid var(--line); font-weight:700;
+  }
+  .cart-table td{ vertical-align:middle; border-bottom:1px solid var(--line); }
+  .cart-table td.sr-col{ color:var(--ink-soft); font-weight:600; width:34px; }
+  .item-discount-tag{
+    font-size:.7rem; background:var(--amber-soft); color:#9c6a14;
+    padding:.1rem .4rem; border-radius:6px; display:inline-block; margin-top:.15rem;
+  }
+  .empty-cart{
+    text-align:center; padding:2rem 1rem; color:var(--ink-soft); font-size:.88rem;
+  }
+  .empty-cart i{ font-size:1.8rem; color:var(--line); display:block; margin-bottom:.5rem; }
+
+  .row-action-btn{
+    width:28px; height:28px; border-radius:7px; display:inline-flex; align-items:center; justify-content:center;
+    border:1px solid var(--line); background:#fff; color:var(--ink-soft);
+  }
+  .row-action-btn:hover{ background:var(--workspace); }
+  .row-action-btn.danger:hover{ color:var(--danger); border-color:var(--danger); }
+
+  /* ---------- Template switcher ---------- */
+  .tmpl-tabs{ display:flex; gap:.5rem; margin-bottom:.9rem; }
+  .tmpl-tab{
+    flex:1; text-align:center; padding:.5rem .4rem; border-radius:10px;
+    border:1px solid var(--line); background:#fff; font-size:.78rem; font-weight:600;
+    color:var(--ink-soft); cursor:pointer; transition:.15s;
+  }
+  .tmpl-tab.active{ border-color:var(--accent); background:var(--accent-soft); color:var(--accent-dark); }
+  .tmpl-tab small{ display:block; font-weight:400; font-size:.68rem; color:var(--ink-soft); }
+
+  .paper-size-row{ display:flex; gap:.4rem; margin-bottom:1rem; }
+  .paper-size-row .form-select{ font-size:.8rem; padding:.3rem .6rem; }
+
+  /* ---------- Receipt preview shell ---------- */
+  .preview-shell{
+    background:repeating-linear-gradient(45deg, #e4e8ec 0 10px, #eaedf1 10px 20px);
+    border-radius:var(--radius);
+    padding:1.6rem .6rem 2.2rem;
+    display:flex;
+    justify-content:center;
+    min-height:520px;
+  }
+  .receipt-paper{
+    background:var(--paper);
+    box-shadow:0 18px 38px -14px rgba(20,30,40,.35);
+    position:relative;
+    margin:0 auto;
+    overflow:hidden;
+  }
+  .paper-58{ width:300px; }
+  .paper-80{ width:340px; }
+  .paper-a4{ width:380px; }
+
+  /* shared receipt typography helpers */
+  .rc-mono{ font-family:'JetBrains Mono',monospace; }
+  .rc-muted{ color:var(--ink-soft); }
+  .rc-total-row{ font-weight:700; }
+  .rc-dashed{ border-top:1px dashed #c7ccd2; }
+  .rc-status-pill{
+    font-size:.66rem; font-weight:700; padding:.15rem .55rem; border-radius:999px; letter-spacing:.04em;
+  }
+  .rc-status-paid{ background:#e3f6ea; color:var(--good); }
+  .rc-status-unpaid{ background:#fde9e7; color:var(--danger); }
+  .rc-sr{ display:inline-block; min-width:1.4em; color:var(--ink-soft); font-weight:600; }
+
+  .barcode-wrap svg rect{ shape-rendering:crispEdges; }
+
+  /* ===== Template: Modern ===== */
+  .tmpl-modern{ border-radius:16px; padding:1.5rem 1.4rem; }
+  .tmpl-modern .rc-eyebrow{ font-size:.68rem; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-soft); font-weight:700;}
+  .tmpl-modern .rc-title{ font-family:'Sora',sans-serif; font-weight:700; font-size:1.25rem; }
+  .tmpl-modern .rc-code-badge{
+    background:var(--workspace); border:1px solid var(--line); border-radius:8px;
+    padding:.25rem .55rem; font-size:.72rem; font-weight:700; letter-spacing:.04em; font-family:'JetBrains Mono',monospace;
+  }
+  .tmpl-modern .rc-meta-row{ display:flex; justify-content:space-between; padding:.45rem 0; border-bottom:1px solid var(--line); font-size:.84rem; }
+  .tmpl-modern .rc-meta-row span.lbl{ color:var(--ink-soft); display:flex; align-items:center; gap:.4rem; }
+  .tmpl-modern .rc-meta-row span.lbl i{ color:var(--accent); width:16px; text-align:center; }
+  .tmpl-modern .rc-item-row{ display:flex; justify-content:space-between; padding:.4rem 0; font-size:.83rem; border-bottom:1px dashed var(--line); gap:.5rem; }
+  .tmpl-modern .rc-item-name{ font-weight:600; }
+  .tmpl-modern .rc-item-sub{ font-size:.72rem; color:var(--ink-soft); }
+  .tmpl-modern .rc-note-box{
+    background:var(--amber-soft); border-left:3px solid var(--amber); border-radius:8px;
+    padding:.6rem .75rem; font-size:.78rem; color:#7a5410; margin-top:.9rem;
+  }
+  .tmpl-modern .rc-cash-box{
+    background:var(--accent-soft); border-radius:8px; padding:.6rem .75rem; margin-top:.6rem;
+  }
+
+  /* ===== Template: Ticket ===== */
+  .tmpl-ticket{ font-family:'JetBrains Mono',monospace; padding:1.6rem 1.2rem 1.4rem; }
+  .tmpl-ticket::before, .tmpl-ticket::after{
+    content:""; position:absolute; left:0; right:0; height:12px;
+    background:radial-gradient(circle at 7px 6px, var(--workspace) 5px, transparent 5.5px);
+    background-size:14px 12px;
+  }
+  .tmpl-ticket::before{ top:-1px; }
+  .tmpl-ticket::after{ bottom:-1px; }
+  .tmpl-ticket .rc-head{ text-align:center; font-weight:700; font-size:.85rem; letter-spacing:.05em; margin-bottom:.3rem;}
+  .tmpl-ticket .rc-sub{ text-align:center; font-size:.7rem; color:var(--ink-soft); margin-bottom:.7rem; }
+  .tmpl-ticket .rc-codebox{
+    border:1px dashed #c7ccd2; border-radius:6px; text-align:center; padding:.5rem; margin:.7rem 0; font-size:.8rem; font-weight:700;
+  }
+  .tmpl-ticket .rc-line{ display:flex; justify-content:space-between; font-size:.74rem; padding:.18rem 0; }
+  .tmpl-ticket .rc-item-block{ margin-bottom:.35rem; }
+  .tmpl-ticket .rc-item-top{ display:flex; justify-content:space-between; font-size:.78rem; font-weight:600; gap:.5rem; }
+  .tmpl-ticket .rc-item-bottom{ display:flex; justify-content:space-between; font-size:.68rem; color:var(--ink-soft); }
+
+  /* ===== Template: Slip (bank style) ===== */
+  .tmpl-slip{ padding:0 0 1.3rem; border-radius:16px; }
+  .tmpl-slip .rc-bar{
+    background:linear-gradient(135deg, var(--accent), var(--accent-dark));
+    color:#fff; padding:1rem 1.2rem .9rem; border-radius:16px 16px 0 0;
+  }
+  .tmpl-slip .rc-bar .rc-biz{ font-family:'Sora',sans-serif; font-weight:700; font-size:1.05rem; }
+  .tmpl-slip .rc-bar .rc-sub{ font-size:.72rem; opacity:.85; }
+  .tmpl-slip .rc-body{ padding:1rem 1.2rem; }
+  .tmpl-slip .rc-field-row{ display:flex; justify-content:space-between; padding:.4rem 0; border-bottom:1px solid var(--line); font-size:.82rem; }
+  .tmpl-slip .rc-field-row .lbl{ color:var(--ink-soft); }
+  .tmpl-slip .rc-item-row{ display:flex; justify-content:space-between; font-size:.8rem; padding:.32rem 0; border-bottom:1px dashed var(--line); gap:.5rem; }
+  .tmpl-slip .rc-amount-box{
+    background:var(--workspace); border-radius:10px; padding:.9rem 1rem; margin-top:.9rem; text-align:center;
+  }
+  .tmpl-slip .rc-amount-box .amt{ font-family:'Sora',sans-serif; font-weight:800; font-size:1.6rem; color:var(--ink); }
+  .tmpl-slip .rc-amount-box .words{ font-size:.68rem; color:var(--ink-soft); margin-top:.25rem; text-transform:uppercase; letter-spacing:.03em; }
+
+  .rc-footer-note{ text-align:center; font-size:.7rem; color:var(--ink-soft); margin-top:1rem; padding-top:.8rem; border-top:1px dashed var(--line); }
+
+  /* ---------- App watermark (shown on every template, print & share) ---------- */
+  .rc-app-watermark{
+    text-align:center; font-size:.6rem; line-height:1.4; color:#9aa2ad;
+    margin-top:.7rem; padding-top:.55rem; border-top:1px dashed var(--line);
+    letter-spacing:.01em;
+  }
+
+  /* ---------- Sales dashboard ---------- */
+  .sales-dash-card{ background:linear-gradient(180deg,#fff,#fdfdfb); }
+  .dash-toggle-btn{ background:var(--workspace); border-color:var(--line); color:var(--ink-soft); }
+  .dash-toggle-btn:hover{ background:var(--line); color:var(--ink); }
+  .dash-stat{
+    border-radius:12px; padding:.85rem 1rem; height:100%;
+    border:1px solid var(--line); position:relative; overflow:hidden;
+  }
+  .dash-stat::before{
+    content:""; position:absolute; inset:0 auto 0 0; width:4px;
+  }
+  .dash-stat-daily{ background:var(--accent-soft); }
+  .dash-stat-daily::before{ background:var(--accent); }
+  .dash-stat-weekly{ background:var(--amber-soft); }
+  .dash-stat-weekly::before{ background:var(--amber); }
+  .dash-stat-monthly{ background:#eaf0fe; }
+  .dash-stat-monthly::before{ background:#3b63d9; }
+  .dash-stat-label{ font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); display:flex; align-items:center; gap:.35rem; }
+  .dash-stat-amt{ font-family:'Sora',sans-serif; font-weight:800; font-size:1.35rem; color:var(--ink); margin-top:.15rem; }
+  .dash-stat-sub{ font-size:.72rem; color:var(--ink-soft); margin-top:.1rem; }
+
+  /* ---------- Sticky preview col ---------- */
+  @media (min-width:992px){
+    .sticky-col{ position:sticky; top:1rem; }
+  }
+
+  /* ---------- Toast ---------- */
+  .toast{ font-size:.85rem; }
+
+  /* ---------- Barcode / QR scanner ---------- */
+  #scannerReader{
+    position:relative;
+    width:100%; border-radius:12px; overflow:hidden; background:#000;
+    aspect-ratio: 4 / 3;
+    max-height:min(60vh, 420px);
+  }
+  #scannerReader video{
+    display:block; width:100%; height:100%; object-fit:cover; border-radius:12px;
+  }
+  .scan-flash{
+    position:absolute; inset:0; background:rgba(31,157,85,.35);
+    opacity:0; pointer-events:none; transition:opacity .15s;
+  }
+  .scan-flash.active{ opacity:1; }
+  .scan-log-item{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:.45rem .6rem; border-radius:8px; background:var(--workspace);
+    font-size:.82rem; margin-bottom:.35rem;
+  }
+  .scan-log-item .qty-badge{
+    background:var(--accent); color:#fff; font-weight:700; border-radius:999px;
+    font-size:.7rem; padding:.05rem .5rem; margin-left:.4rem;
+  }
+  #scanUnknownBox{
+    background:var(--amber-soft); border:1px solid #f0d9a8; border-radius:12px;
+    padding:.9rem;
+  }
+  .torch-toggle-btn{
+    position:absolute; top:10px; right:10px; z-index:5;
+    background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.25); color:#fff;
+    border-radius:10px; padding:0.4rem 0.8rem;
+    display:flex; align-items:center; justify-content:center; gap:0.5rem; font-size:0.9rem;
+  }
+  .torch-toggle-btn.active{ background:var(--amber); border-color:var(--amber); color:#1f2530; }
+
+  /* Scan target frame — a bordered, glowing box centered over the video
+     (matches the reference "green box with a glowing line" look) so users
+     have a clear area to line the barcode up in, instead of just a bare
+     video feed. The sweep line is confined inside this frame. */
+  .scan-target-frame{
+    position:absolute; left:10%; right:10%; top:32%; bottom:32%;
+    border:2px solid #22c55e; border-radius:16px;
+    box-shadow:0 0 14px 1px rgba(34,197,94,.55), inset 0 0 14px 1px rgba(34,197,94,.15);
+    pointer-events:none;
+  }
+
+  /* Custom qty stepper — mobile browsers never render native number-input
+     spin arrows (that's a desktop-only browser feature), so +/- buttons
+     are needed for tap-to-adjust quantity on a phone. Built as our own
+     flex row (not Bootstrap's .input-group) with flex-wrap:nowrap so the
+     buttons always stay left/right of the number, never stacking, even in
+     a narrow column on mobile. Buttons and input share the same border/
+     background weight so neither looks more "washed out" than the other.
+
+     IMPORTANT: min-width:0 on the flex items + a smaller, shrinkable
+     min-width on the number input is what stops this from overflowing its
+     column on narrow phones (previously the input's 44px min-width plus
+     two 32px buttons didn't fit in the "Qty" column, so the "+" button
+     visually spilled into the "Price" field next to it). */
+  .qty-stepper{
+    display:flex; flex-wrap:nowrap; align-items:stretch; gap:.25rem;
+    min-width:0;
+  }
+  .qty-stepper input[type="number"]{
+    flex:1 1 28px; min-width:0; width:auto;
+    text-align:center; padding-left:.2rem; padding-right:.2rem;
+    font-size:1.05rem; font-weight:700; color:var(--ink);
+    -moz-appearance:textfield;
+  }
+  .qty-stepper input[type="number"]::-webkit-inner-spin-button,
+  .qty-stepper input[type="number"]::-webkit-outer-spin-button{
+    -webkit-appearance:none; margin:0;
+  }
+  .qty-step-btn{
+    flex:0 0 auto; width:28px;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:700; line-height:1; font-size:1rem;
+    border:1.5px solid var(--accent); background:#fff; color:var(--accent);
+  }
+  .qty-step-btn:hover, .qty-step-btn:focus{ background:var(--accent-soft); color:var(--accent-dark); }
+  .qty-step-btn:active{ background:var(--accent); color:#fff; }
+  #scannerModal .modal-content{ opacity:1; background:#fff; }
+
+  /* Realtime scanning animation — a simple sweeping line, confined inside
+     .scan-target-frame above, no dark vignette/box-shadow on the whole
+     video (that was what dimmed/read as "low opacity" before). */
+  .scan-sweep-line{
+    position:absolute; left:12%; right:12%; height:2px;
+    background:#22c55e; box-shadow:0 0 8px 2px #22c55e;
+    animation:scanSweep 1.6s ease-in-out infinite; pointer-events:none;
+  }
+  @keyframes scanSweep{ 0%{top:34%} 50%{top:66%} 100%{top:34%} }
+
+  /* ---------- Inventory ---------- */
+  .inv-nav-btn{ position:relative; }
+  .inv-badge{
+    position:absolute; top:-6px; right:-6px; background:var(--danger); color:#fff;
+    font-size:.62rem; font-weight:700; border-radius:999px; padding:.05rem .38rem; line-height:1.3;
+  }
+  .inv-table{ font-size:.85rem; }
+  .inv-table th{
+    font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft);
+    border-bottom:1px solid var(--line); font-weight:700;
+  }
+  .inv-table td{ vertical-align:middle; }
+  .inv-row-low td{ background:var(--amber-soft); }
+  .inv-row-out td{ background:#fde9e7; }
+  .inv-stock-pill{
+    font-size:.68rem; font-weight:700; padding:.12rem .5rem; border-radius:999px; display:inline-block;
+  }
+  .inv-stock-ok{ background:#e3f6ea; color:var(--good); }
+  .inv-stock-low{ background:var(--amber-soft); color:#9c6a14; }
+  .inv-stock-out{ background:#fde9e7; color:var(--danger); }
+  .inv-stock-untracked{ background:var(--workspace); color:var(--ink-soft); }
+  #invAddForm{ background:var(--workspace); border-radius:12px; padding:.9rem; }
+  #invBulkImportBox{ background:var(--workspace); border-radius:12px; padding:.9rem; }
+  .inv-low-banner{
+    background:var(--amber-soft); border:1px solid #f0d9a8; border-radius:10px;
+    padding:.6rem .8rem; font-size:.82rem; color:#7a5410;
+  }
+
+  /* ---------- Print ----------
+     IMPORTANT: previously this hid everything with visibility:hidden, which
+     keeps hidden elements in the page's LAYOUT (they just aren't drawn).
+     That made the printed page's height equal to the full app UI (all the
+     builder cards, forms, offcanvas, modal, toast) even though none of it
+     was visible — causing the receipt to land in the top-left corner with
+     huge empty space to the right/bottom and splitting across 2-3 pages.
+
+     Fix: #printRoot is a hidden container that is kept permanently in sync
+     with a copy of the current receipt (via JS, any time the receipt
+     changes). These rules apply on ANY @media print event — regardless of
+     whether printing was triggered by our in-app "Print" button, the
+     browser's own menu, a share sheet, or a keyboard shortcut — because
+     they don't depend on a JS class being toggled first. */
+  #printRoot{ display:none; }
+  @media print{
+    html, body{ margin:0 !important; padding:0 !important; background:#fff !important; }
+    body > *:not(#printRoot){ display:none !important; }
+    #printRoot{
+      display:block !important;
+      margin:0 !important;
+      padding:0 !important;
+    }
+    #printRoot .receipt-paper{
+      box-shadow:none !important;
+      margin:0 !important;
+      page-break-after:avoid;
+      page-break-inside:avoid;
+    }
+    #printRoot .paper-58{ width:58mm !important; }
+    #printRoot .paper-80{ width:80mm !important; }
+    #printRoot .paper-a4{ width:190mm !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ NAVBAR ============ -->
+<nav class="app-navbar d-flex align-items-center justify-content-between flex-wrap gap-2">
+  <span class="brand"><i class="bi bi-receipt"></i> Dukan<span class="dot">Slip</span></span>
+  <div class="d-flex align-items-center gap-2">
+    <span class="bt-pill d-none" id="btStatusPill"><span class="dot-status"></span><span id="btStatusText">Printer not connected</span></span>
+    <button class="nav-icon-btn inv-nav-btn" data-bs-toggle="modal" data-bs-target="#inventoryModal"><i class="bi bi-boxes"></i> Inventory<span class="inv-badge d-none" id="invBadge">0</span></button>
+    <button class="nav-icon-btn" data-bs-toggle="modal" data-bs-target="#historyModal"><i class="bi bi-clock-history"></i> History</button>
+    <button class="nav-icon-btn" data-bs-toggle="offcanvas" data-bs-target="#settingsPanel"><i class="bi bi-gear"></i> Settings</button>
+  </div>
+</nav>
+
+<div class="container-fluid py-3 px-3 px-md-4">
+
+  <div class="row g-3">
+
+    <!-- ============ LEFT: BUILDER ============ -->
+    <div class="col-lg-7">
+
+      <div class="builder-card">
+        <h6><i class="bi bi-person-circle"></i> Sale details</h6>
+        <div class="row g-2">
+          <div class="col-sm-6">
+            <label class="form-label">Customer name (optional)</label>
+            <input type="text" id="customerName" class="form-control" placeholder="Walk-in customer">
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label">Status</label>
+            <select id="saleStatus" class="form-select">
+              <option value="paid" selected>Paid</option>
+              <option value="unpaid">Unpaid / On account</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Note (printed on receipt)</label>
+            <input type="text" id="saleNote" class="form-control" placeholder="e.g. Thank you for shopping with us!">
+          </div>
+        </div>
+      </div>
+
+      <div class="builder-card">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0"><i class="bi bi-plus-circle"></i> Add item</h6>
+          <button type="button" class="btn btn-sm btn-outline-brand" id="openScannerBtn" data-bs-toggle="modal" data-bs-target="#scannerModal">
+            <i class="bi bi-upc-scan"></i> Scan barcode / QR
+          </button>
+        </div>
+        <form id="addItemForm" class="row g-2 align-items-end">
+          <div class="col-12 col-sm-4">
+            <label class="form-label">Product name</label>
+            <input type="text" id="itemName" class="form-control" list="catalogList" placeholder="e.g. Cold drink" required>
+            <datalist id="catalogList"></datalist>
+          </div>
+          <div class="col-5 col-sm-3">
+            <label class="form-label">Qty</label>
+            <div class="qty-stepper">
+              <button type="button" class="btn qty-step-btn" id="itemQtyMinus">&minus;</button>
+              <input type="number" id="itemQty" class="form-control" value="1" min="1" step="1" required>
+              <button type="button" class="btn qty-step-btn" id="itemQtyPlus">+</button>
+            </div>
+          </div>
+          <div class="col-7 col-sm-3">
+            <label class="form-label">Price</label>
+            <input type="number" id="itemPrice" class="form-control" placeholder="0.00" min="0" step="0.01" required>
+          </div>
+          <div class="col-12 col-sm-2">
+            <button type="submit" class="btn btn-brand w-100" id="addItemBtn"><i class="bi bi-plus-lg"></i></button>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Barcode (optional — link this product to a scan)</label>
+            <input type="text" id="itemBarcode" class="form-control" placeholder="Scan or type a barcode to link it to this product">
+          </div>
+        </form>
+      </div>
+
+      <div class="builder-card">
+        <h6><i class="bi bi-cart3"></i> Cart</h6>
+        <div class="table-responsive">
+          <table class="table cart-table mb-0">
+            <thead>
+              <tr>
+                <th style="width:34px;">#</th>
+                <th>Item</th>
+                <th class="text-center">Qty</th>
+                <th class="text-end">Price</th>
+                <th class="text-end">Total</th>
+                <th class="text-end" style="width:70px;"></th>
+              </tr>
+            </thead>
+            <tbody id="cartBody"></tbody>
+          </table>
+        </div>
+        <div id="emptyCartMsg" class="empty-cart">
+          <i class="bi bi-bag"></i>
+          No items yet — add a product above to get started.
+        </div>
+      </div>
+
+      <div class="builder-card">
+        <h6><i class="bi bi-percent"></i> Overall adjustments</h6>
+        <div class="row g-2">
+          <div class="col-6 col-sm-4">
+            <label class="form-label">Overall discount</label>
+            <div class="input-group">
+              <input type="number" id="overallDiscountValue" class="form-control" placeholder="0" min="0" step="0.01" value="0">
+              <select id="overallDiscountType" class="form-select" style="max-width:62px;">
+                <option value="percent">%</option>
+                <option value="fixed">Rs</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-6 col-sm-4">
+            <label class="form-label">Tax / GST %</label>
+            <input type="number" id="taxPercent" class="form-control" placeholder="0" min="0" step="0.01" value="0">
+          </div>
+          <div class="col-12 col-sm-4 d-flex align-items-end">
+            <button class="btn btn-outline-secondary w-100" id="newSaleBtn"><i class="bi bi-arrow-counterclockwise"></i> New sale</button>
+          </div>
+        </div>
+
+        <div class="rc-dashed mt-3 pt-3">
+          <div class="d-flex justify-content-between small mb-1"><span class="rc-muted">Subtotal</span><span id="sumSubtotal">Rs0.00</span></div>
+          <div class="d-flex justify-content-between small mb-1"><span class="rc-muted">Discount</span><span id="sumDiscount">-Rs0.00</span></div>
+          <div class="d-flex justify-content-between small mb-1"><span class="rc-muted">Tax</span><span id="sumTax">Rs0.00</span></div>
+          <div class="d-flex justify-content-between fw-bold fs-5 mt-1"><span>Total</span><span id="sumTotal">Rs0.00</span></div>
+        </div>
+      </div>
+
+      <div class="builder-card">
+        <h6><i class="bi bi-cash-coin"></i> Cash received &amp; change</h6>
+        <div class="row g-2 align-items-end">
+          <div class="col-6">
+            <label class="form-label">Amount received from customer</label>
+            <input type="number" id="amountReceived" class="form-control" placeholder="e.g. 5000" min="0" step="0.01">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Change to return</label>
+            <input type="text" id="changeDueDisplay" class="form-control fw-bold" value="Rs0.00" readonly tabindex="-1">
+          </div>
+        </div>
+        <p class="small rc-muted mt-2 mb-0" id="changeHint">
+          <i class="bi bi-info-circle"></i> Enter what the customer physically handed over (e.g. 5000) — the change due is calculated automatically and shown on the receipt.
+        </p>
+      </div>
+
+    </div>
+
+    <!-- ============ RIGHT: PREVIEW ============ -->
+    <div class="col-lg-5">
+      <div class="sticky-col">
+
+        <div class="builder-card">
+          <h6><i class="bi bi-palette"></i> Template</h6>
+          <div class="tmpl-tabs">
+            <div class="tmpl-tab" data-tmpl="modern">Modern<small>Card style</small></div>
+            <div class="tmpl-tab active" data-tmpl="ticket">Ticket<small>Classic stub</small></div>
+            <div class="tmpl-tab" data-tmpl="slip">Slip<small>Bank style</small></div>
+          </div>
+          <div class="paper-size-row">
+            <select id="paperSize" class="form-select">
+              <option value="58mm">58mm thermal roll</option>
+              <option value="80mm" selected>80mm thermal roll</option>
+              <option value="a4">A4 / Letter sheet</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="viewingBanner" class="alert alert-warning d-none py-2 px-3 small d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-eye"></i> Viewing a saved receipt from history</span>
+          <button class="btn btn-sm btn-outline-secondary" id="backToCurrentBtn">Back to current sale</button>
+        </div>
+
+        <div class="preview-shell">
+          <div id="receiptPreview" class="receipt-paper paper-80"></div>
+        </div>
+
+        <div class="builder-card mt-3">
+          <h6><i class="bi bi-printer"></i> Share &amp; print</h6>
+          <div class="d-grid gap-2">
+            <button class="btn btn-brand" id="saveInvoiceBtn"><i class="bi bi-save"></i> Save invoice to history</button>
+            <button class="btn btn-outline-secondary" id="shareImageBtn"><i class="bi bi-printer"></i> Print Now</button>
+            <div class="d-flex gap-2">
+              <button class="btn btn-outline-secondary flex-fill" id="connectBtBtn"><i class="bi bi-bluetooth"></i> Pair Bluetooth printer</button>
+              <button class="btn btn-amber flex-fill" id="printBtBtn" disabled><i class="bi bi-receipt"></i> Print via Bluetooth</button>
+            </div>
+          </div>
+          <p class="small rc-muted mt-2 mb-0">
+            <i class="bi bi-share"></i>
+            <strong>Share receipt as PNG</strong> opens your device's share sheet — pick <strong>iPrint</strong> or any other "cat/panda"-style pocket printer app to send the receipt image straight to it. If sharing isn't supported on this browser, the image downloads instead so you can open it from the printer's app.
+          </p>
+          <p class="small rc-muted mt-2 mb-0">
+            <i class="bi bi-bluetooth"></i>
+            For printers exposing a BLE serial service, pair once above, then use <strong>Print via Bluetooth</strong> — works over HTTPS on Chrome/Edge (Android or desktop).
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============ SALES DASHBOARD ============ -->
+  <div class="builder-card sales-dash-card mt-3 mb-0">
+    <div class="d-flex justify-content-between align-items-center mb-1">
+      <h6 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Sales dashboard</h6>
+      <button class="btn btn-sm nav-icon-btn dash-toggle-btn" id="dashToggleBtn" type="button">
+        <i class="bi bi-eye-slash"></i> <span id="dashToggleLabel">Hide</span>
+      </button>
+    </div>
+    <div id="dashboardBody" class="row g-2 mt-1">
+      <div class="col-12 col-sm-4">
+        <div class="dash-stat dash-stat-daily">
+          <div class="dash-stat-label"><i class="bi bi-sun"></i> Today</div>
+          <div class="dash-stat-amt" id="dashDailyAmt">Rs0.00</div>
+          <div class="dash-stat-sub" id="dashDailyCount">0 sales</div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-4">
+        <div class="dash-stat dash-stat-weekly">
+          <div class="dash-stat-label"><i class="bi bi-calendar-week"></i> This week</div>
+          <div class="dash-stat-amt" id="dashWeeklyAmt">Rs0.00</div>
+          <div class="dash-stat-sub" id="dashWeeklyCount">0 sales</div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-4">
+        <div class="dash-stat dash-stat-monthly">
+          <div class="dash-stat-label"><i class="bi bi-calendar3"></i> This month</div>
+          <div class="dash-stat-amt" id="dashMonthlyAmt">Rs0.00</div>
+          <div class="dash-stat-sub" id="dashMonthlyCount">0 sales</div>
+        </div>
+      </div>
+    </div>
+    <p class="small rc-muted mt-2 mb-0" id="dashEmptyMsg">
+      <i class="bi bi-info-circle"></i> Sales update automatically — in real time — whenever an invoice is saved, printed, or shared. This dashboard never appears on a printed or shared receipt.
+    </p>
+  </div>
+</div>
+
+<!-- ============ SETTINGS OFFCANVAS ============ -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="settingsPanel">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title brand-font">Business settings</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body">
+    <form id="settingsForm">
+      <label class="form-label">Business name</label>
+      <input type="text" id="setBizName" class="form-control mb-3" placeholder="Rahmat General Store">
+
+      <label class="form-label">Address</label>
+      <input type="text" id="setAddress" class="form-control mb-3" placeholder="Kot Haibat Link Road, Ismail Wala">
+
+      <label class="form-label">Phone</label>
+      <input type="text" id="setPhone" class="form-control mb-3" placeholder="0300-0000000">
+
+      <label class="form-label">Default footer note</label>
+      <input type="text" id="setFooter" class="form-control mb-3" placeholder="Goods once sold will not be returned">
+
+      <div class="row g-2">
+        <div class="col-6">
+          <label class="form-label">Invoice prefix</label>
+          <input type="text" id="setPrefix" class="form-control mb-3" placeholder="INV">
+        </div>
+        <div class="col-6">
+          <label class="form-label">Currency symbol</label>
+          <input type="text" id="setCurrency" class="form-control mb-3" placeholder="Rs">
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Bluetooth chunk size (advanced)</label>
+        <select id="setBtChunkSize" class="form-select">
+          <option value="20">20 bytes — safest for cheap/mini printers (default)</option>
+          <option value="50">50 bytes</option>
+          <option value="100">100 bytes</option>
+          <option value="150">150 bytes — larger/known-good printers only</option>
+        </select>
+        <div class="form-text">If your mini printer prints garbled text, cuts off, or doesn't print at all, keep this at 20 bytes.</div>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center mb-3 p-2 rounded" style="background:var(--workspace);">
+        <span class="small">Next invoice number</span>
+        <strong id="nextInvoicePreview" class="rc-mono"></strong>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Low stock alert threshold (default)</label>
+        <input type="number" id="setLowStockThreshold" class="form-control" min="0" step="1" placeholder="5">
+        <div class="form-text">Products at or below this quantity are flagged as low stock in Inventory. Can be overridden per product.</div>
+      </div>
+
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" id="setSoundEnabled">
+        <label class="form-check-label" for="setSoundEnabled">Play a sound when an item is added</label>
+      </div>
+
+      <button type="submit" class="btn btn-brand w-100"><i class="bi bi-check2"></i> Save settings</button>
+      <button type="button" id="resetCounterBtn" class="btn btn-outline-secondary w-100 mt-2">Reset invoice counter to 1</button>
+
+      <hr class="my-3">
+      <p class="small rc-muted mb-0"><i class="bi bi-boxes"></i> Manage your full product list, stock levels and bulk import from the <strong>Inventory</strong> button in the top navigation bar.</p>
+    </form>
+  </div>
+</div>
+
+<!-- ============ HISTORY MODAL ============ -->
+<div class="modal fade" id="historyModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title brand-font">Invoice history</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr><th>Invoice</th><th>Date</th><th>Customer</th><th class="text-end">Total</th><th class="text-end">Actions</th></tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+        <p class="small rc-muted text-center mb-0" id="noHistoryMsg">No saved invoices yet.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ INVENTORY MODAL ============ -->
+<div class="modal fade" id="inventoryModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title brand-font"><i class="bi bi-boxes"></i> Inventory</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+
+        <div id="invLowBanner" class="inv-low-banner d-none mb-3">
+          <i class="bi bi-exclamation-triangle"></i> <span id="invLowBannerText"></span>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+          <input type="text" id="invSearch" class="form-control" style="max-width:260px;" placeholder="Search by name or barcode...">
+          <button type="button" class="btn btn-brand btn-sm" id="invShowAddBtn"><i class="bi bi-plus-lg"></i> Add product</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="invShowImportBtn"><i class="bi bi-upload"></i> Bulk import (CSV)</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="invExportCsvBtn"><i class="bi bi-download"></i> Export CSV</button>
+          <span class="small rc-muted ms-auto" id="invCountLabel">0 products</span>
+        </div>
+
+        <form id="invAddForm" class="row g-2 mb-3 d-none">
+          <input type="hidden" id="invEditId" value="">
+          <div class="col-12"><strong class="small" id="invFormTitle">Add product</strong></div>
+          <div class="col-12 col-sm-4">
+            <label class="form-label">Product name</label>
+            <input type="text" id="invName" class="form-control form-control-sm" required>
+          </div>
+          <div class="col-6 col-sm-2">
+            <label class="form-label">Price</label>
+            <input type="number" id="invPrice" class="form-control form-control-sm" min="0" step="0.01" required>
+          </div>
+          <div class="col-6 col-sm-2">
+            <label class="form-label">Qty</label>
+            <div class="qty-stepper">
+              <button type="button" class="btn qty-step-btn" id="invStockMinus">&minus;</button>
+              <input type="number" id="invStock" class="form-control form-control-sm" min="0" step="1" placeholder="untracked">
+              <button type="button" class="btn qty-step-btn" id="invStockPlus">+</button>
+            </div>
+          </div>
+          <div class="col-6 col-sm-3">
+            <label class="form-label">Barcode (optional)</label>
+            <input type="text" id="invBarcode" class="form-control form-control-sm">
+          </div>
+          <div class="col-6 col-sm-1">
+            <label class="form-label">Low at</label>
+            <input type="number" id="invLowThreshold" class="form-control form-control-sm" min="0" step="1" placeholder="—">
+          </div>
+          <div class="col-12 d-flex gap-2 mt-1">
+            <button type="submit" class="btn btn-brand btn-sm"><i class="bi bi-check2"></i> Save product</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="invCancelAddBtn">Cancel</button>
+          </div>
+        </form>
+
+        <div id="invBulkImportBox" class="mb-3 d-none">
+          <div class="small fw-semibold mb-2">Bulk import products</div>
+          <p class="small rc-muted mb-2">One product per line: <code>name,price,barcode,stock</code> — barcode and stock are optional (leave blank, e.g. <code>Cold drink,120,,50</code>). Existing products (matched by barcode, or name) will be updated.</p>
+          <input type="file" id="invCsvFile" accept=".csv,text/csv,text/plain" class="form-control form-control-sm mb-2">
+          <textarea id="invCsvText" class="form-control form-control-sm mb-2" rows="4" placeholder="Cold drink,120,8964000123,50&#10;Rice 1kg,260,,20"></textarea>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-brand btn-sm" id="invImportBtn"><i class="bi bi-upload"></i> Import</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="invCancelImportBtn">Cancel</button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table inv-table align-middle mb-0">
+            <thead>
+              <tr><th>Product</th><th>Barcode</th><th class="text-end">Price</th><th class="text-center">Stock</th><th class="text-end">Actions</th></tr>
+            </thead>
+            <tbody id="invTableBody"></tbody>
+          </table>
+        </div>
+        <p class="small rc-muted text-center mb-0" id="invEmptyMsg">No products yet — add one above or scan a barcode.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SCANNER MODAL ============ -->
+<div class="modal fade" id="scannerModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title brand-font"><i class="bi bi-upc-scan"></i> Scan to add products</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="position-relative">
+          <div id="scannerReader"><video id="scannerVideoEl" muted playsinline></video></div>
+          <div class="scan-target-frame"></div>
+          <div class="scan-sweep-line"></div>
+          <div class="scan-flash" id="scanFlash"></div>
+          <button type="button" class="torch-toggle-btn" id="torchToggleBtn" title="Toggle flashlight" aria-label="Toggle flashlight"><i class="bi bi-flashlight"></i> 🔦</button>
+        </div>
+        <p class="small rc-muted mt-2 mb-2">
+          <i class="bi bi-info-circle"></i> Point the camera at a product's barcode or QR code inside the green box. A known item is added straight to the cart.
+        </p>
+
+        <div id="scanUnknownBox" class="d-none mb-2">
+          <div class="small fw-semibold mb-2"><i class="bi bi-question-circle"></i> New code scanned — add it to your inventory</div>
+          <div class="rc-mono small mb-2" id="scanUnknownCode"></div>
+          <div class="row g-2">
+            <div class="col-12">
+              <input type="text" id="scanUnknownName" class="form-control form-control-sm" placeholder="Product name">
+            </div>
+            <div class="col-6">
+              <input type="number" id="scanUnknownPrice" class="form-control form-control-sm" placeholder="Price" min="0" step="0.01">
+            </div>
+            <div class="col-6">
+              <div class="qty-stepper">
+                <button type="button" class="btn qty-step-btn" id="scanUnknownQtyMinus">&minus;</button>
+                <input type="number" id="scanUnknownQty" class="form-control form-control-sm" value="1" min="1" step="1">
+                <button type="button" class="btn qty-step-btn" id="scanUnknownQtyPlus">+</button>
+              </div>
+            </div>
+          </div>
+          <div class="d-flex gap-2 mt-2">
+            <button type="button" class="btn btn-sm btn-brand flex-fill" id="scanUnknownSaveBtn"><i class="bi bi-check2"></i> Save to inventory</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="scanUnknownSkipBtn">Skip</button>
+          </div>
+        </div>
+
+        <div id="scanLog"></div>
+      </div>
+      <div class="modal-footer">
+        <span class="small rc-muted me-auto" id="scanCountLabel">0 items added this session</span>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Done scanning</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TOASTS ============ -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="appToast" class="toast align-items-center text-bg-dark border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body" id="appToastBody">Saved.</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Isolated container used only while printing (see #printRoot rules in <style> above) -->
+<div id="printRoot"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+'use strict';
+
+/* =========================================================
+   STATE
+   ========================================================= */
+const state = {
+  settings: {
+    businessName: 'Rahmat General Store',
+    address: 'Kot Haibat Link Road, Ismail Wala',
+    phone: '0300-0000000',
+    footerNote: 'Goods once sold will not be returned.',
+    prefix: 'INV',
+    currency: 'Rs',
+    counter: 1,
+    template: 'ticket',
+    paperSize: '80mm',
+    btChunkSize: 20,
+    dashboardHidden: false,
+    lowStockThreshold: 5,
+    soundEnabled: true
+  },
+  catalog: [],      // [{id, name, price, barcode, stock, lowStockThreshold}] — stock/lowStockThreshold are null/undefined for untracked items
+  _loaded: false,   // becomes true once the initial storage load completes; guards against writing over saved data before it has loaded
+  history: [],      // array of saved invoice snapshots
+  cart: [],         // [{id,name,qty,price,discountType,discountValue,barcode}]
+  customer: '',
+  note: '',
+  status: 'paid',
+  overallDiscount: { type: 'percent', value: 0 },
+  taxPercent: 0,
+  amountReceived: 0,
+  viewingHistoryId: null, // when set, preview shows a saved invoice instead of the live cart
+  currentSavedId: null,   // history id the live draft was last auto/manually saved as
+  currentSavedKey: null,  // snapshot fingerprint at the time of that save, to avoid duplicate entries
+  pendingWrites: 0        // number of storage writes currently in flight (used to warn before an unload could lose data)
+};
+
+let editingItemId = null;
+let btDevice = null;
+let btCharacteristic = null;
+
+/* =========================================================
+   STORAGE LAYER — standalone, works on ANY device/browser
+
+   Earlier this used Claude's window.storage API, which only exists
+   while previewing inside Claude's own chat interface — once this
+   file is downloaded, hosted, or installed on a shopkeeper's own
+   computer/phone (the actual deployment target), that API does not
+   exist at all, so every save silently failed and nothing survived
+   a refresh. This is why data kept disappearing.
+
+   Fix: use IndexedDB, a real database built into every modern
+   browser, with an automatic localStorage fallback if IndexedDB is
+   ever unavailable (very old browsers, some private-browsing modes).
+   Both work fully offline and are local to that one device/browser —
+   there is no cloud sync between different shopkeepers' devices.
+   ========================================================= */
+const DB_NAME = 'dukanslip_db';
+const DB_VERSION = 1;
+const STORE_NAME = 'kv';
+const LS_PREFIX = 'dukanslip:';
+let dbPromise = null;
+
+function openDb() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise(resolve => {
+    if (!('indexedDB' in window)) { resolve(null); return; }
+    try {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null); // fall back to localStorage
+    } catch (e) {
+      resolve(null);
+    }
+  });
+  return dbPromise;
+}
+
+async function idbGet(key) {
+  const db = await openDb();
+  if (!db) return undefined;
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(undefined);
+    } catch (e) {
+      resolve(undefined);
+    }
+  });
+}
+
+async function idbSet(key, value) {
+  const db = await openDb();
+  if (!db) return false;
+  return new Promise(resolve => {
+    try {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(value, key);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    } catch (e) {
+      resolve(false);
+    }
+  });
+}
+
+async function storageGet(key, fallback) {
+  try {
+    const idbVal = await idbGet(key);
+    if (idbVal !== undefined) return JSON.parse(idbVal);
+  } catch (e) {
+    console.warn('IndexedDB read failed for', key, e);
+  }
+  // localStorage fallback (also covers first-run migration if a browser
+  // only ever had localStorage data from some other source)
+  try {
+    const raw = localStorage.getItem(LS_PREFIX + key);
+    if (raw !== null) return JSON.parse(raw);
+  } catch (e) {
+    console.warn('localStorage read failed for', key, e);
+  }
+  return fallback;
+}
+
+/**
+ * Writes a key to persistent storage and RETURNS THE PROMISE so callers can
+ * await it. Every call site below awaits this, so a save is fully written
+ * before the UI moves on — closing or refreshing the tab a moment later
+ * can no longer abandon an in-flight write.
+ */
+async function storageSet(key, value) {
+  if (!state._loaded) {
+    console.warn('Skipped storage write for', key, '— initial load not finished yet.');
+    return false;
+  }
+  state.pendingWrites++;
+  updateSaveIndicator();
+  const json = JSON.stringify(value);
+  let ok = false;
+  try {
+    ok = await idbSet(key, json);
+  } catch (e) {
+    console.warn('IndexedDB write failed for', key, e);
+  }
+  // Always mirror to localStorage too — cheap extra safety net in case
+  // IndexedDB gets cleared or is unreliable on a particular device.
+  try {
+    localStorage.setItem(LS_PREFIX + key, json);
+    ok = true;
+  } catch (e) {
+    console.warn('localStorage write failed for', key, e);
+  }
+  if (!ok) {
+    console.error('Storage write failed for', key);
+    showToast('Could not save changes on this device.');
+  }
+  state.pendingWrites = Math.max(0, state.pendingWrites - 1);
+  updateSaveIndicator();
+  return ok;
+}
+
+function updateSaveIndicator() {
+  // Warn the user (via the browser's native "leave site?" prompt) if they
+  // try to close/refresh while a save is still in flight, instead of
+  // silently losing that change.
+  window.onbeforeunload = state.pendingWrites > 0
+    ? (e) => { e.preventDefault(); e.returnValue = ''; return ''; }
+    : null;
+}
+
+/* ---- Normalization helpers used everywhere we match products, so the
+   same physical item is always recognized as the same catalog entry ---- */
+function normalizeName(name) {
+  return String(name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/* Normalizes a scanned/typed barcode for COMPARISON purposes only (the raw,
+   as-scanned value is still what gets stored/displayed). This fixes two
+   real-world causes of "the same item gets treated as a new product":
+     1. Stray whitespace from OCR/typed entry.
+     2. UPC-A codes (12 digits) vs the same product's EAN-13 form (13
+        digits, one leading zero) — many scanners/libraries flip between
+        these for the same physical barcode depending on lighting/angle.
+        Stripping leading zeros from purely-numeric codes makes both forms
+        compare equal. */
+function normalizeBarcode(code) {
+  const trimmed = String(code || '').trim();
+  if (!trimmed) return '';
+  if (/^\d+$/.test(trimmed)) {
+    const stripped = trimmed.replace(/^0+/, '');
+    return stripped || '0';
+  }
+  return trimmed.toLowerCase();
+}
+
+async function loadAll() {
+  const savedSettings = await storageGet('settings', null);
+  if (savedSettings) Object.assign(state.settings, savedSettings);
+  state.catalog = await storageGet('catalog', []);
+  state.history = await storageGet('history', []);
+
+  // Migrate any catalog entries saved before stock tracking / stable IDs
+  // existed, so nothing is lost and everything works with the new features.
+  let migrated = false;
+  state.catalog.forEach(p => {
+    if (!p.id) { p.id = uid(); migrated = true; }
+  });
+
+  // One-time cleanup: merge any catalog rows that are really the same
+  // product (same normalized barcode, or same normalized name) but ended
+  // up duplicated by an earlier bug. Keeps the earliest entry, preferring
+  // whichever copy has a real barcode and the higher tracked stock count.
+  const deduped = dedupeCatalog(state.catalog);
+  if (deduped.changed) {
+    state.catalog = deduped.catalog;
+    migrated = true;
+  }
+
+  state._loaded = true;
+  if (migrated) storageSet('catalog', state.catalog);
+}
+
+function dedupeCatalog(catalog) {
+  const byKey = new Map(); // normalized barcode OR normalized name -> catalog entry
+  const result = [];
+  let changed = false;
+
+  catalog.forEach(p => {
+    const barcodeKey = p.barcode ? 'b:' + normalizeBarcode(p.barcode) : null;
+    const nameKey = 'n:' + normalizeName(p.name);
+    const existing = (barcodeKey && byKey.get(barcodeKey)) || byKey.get(nameKey);
+
+    if (existing) {
+      changed = true;
+      // Prefer keeping a real barcode and the larger tracked stock value.
+      if (!existing.barcode && p.barcode) existing.barcode = p.barcode;
+      if (existing.stock == null && p.stock != null) existing.stock = p.stock;
+      else if (existing.stock != null && p.stock != null) existing.stock = Math.max(existing.stock, p.stock);
+      if (existing.lowStockThreshold == null && p.lowStockThreshold != null) existing.lowStockThreshold = p.lowStockThreshold;
+    } else {
+      result.push(p);
+      byKey.set(nameKey, p);
+      if (barcodeKey) byKey.set(barcodeKey, p);
+    }
+  });
+
+  return { catalog: result, changed };
+}
+
+/* =========================================================
+   UTILITIES
+   ========================================================= */
+/* App credit watermark — shown on every invoice/receipt template, including
+   print, PNG share, and Bluetooth (ESC/POS) output. */
+const APP_WATERMARK_TEXT = 'This Invoicing software was created by Dilawar Pro - www.dilawarpro.com | 03314041010';
+function watermarkHtml() {
+  return `<div class="rc-app-watermark">${escapeHtml(APP_WATERMARK_TEXT)}</div>`;
+}
+
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function uid() {
+  return 'it_' + Math.random().toString(36).slice(2, 10);
+}
+
+/* Wires a pair of +/- buttons to a number input. Needed because mobile
+   browsers never render native number-input spin arrows (desktop-only
+   browser feature) — these buttons are the tap-to-adjust equivalent that
+   works on any device. Blank input is treated as 0 for stepping purposes. */
+function wireQtyStepper(inputId, minusId, plusId, min) {
+  const input = document.getElementById(inputId);
+  const minusBtn = document.getElementById(minusId);
+  const plusBtn = document.getElementById(plusId);
+  const floor = min != null ? min : 0;
+
+  minusBtn.addEventListener('click', () => {
+    const cur = parseFloat(input.value);
+    const next = Math.max(floor, (isNaN(cur) ? floor : cur) - 1);
+    input.value = next;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+  plusBtn.addEventListener('click', () => {
+    const cur = parseFloat(input.value);
+    const next = (isNaN(cur) ? floor : cur) + 1;
+    input.value = next;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+function fmt(n) {
+  const sym = state.settings.currency || 'Rs';
+  return sym + Number(n || 0).toFixed(2);
+}
+
+function padNumber(n, width) {
+  return String(n).padStart(width, '0');
+}
+
+function currentDraftNumber() {
+  return `${state.settings.prefix || 'INV'}-${padNumber(state.settings.counter || 1, 4)}`;
+}
+
+function nowStrings() {
+  const d = new Date();
+  return { iso: d.toISOString(), display: d.toLocaleString() };
+}
+
+/* number to words, used by the "slip" template (cheque-style amount in words) */
+function numberToWords(num) {
+  num = Math.floor(Math.abs(num || 0));
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+    'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  const scales = ['', 'Thousand', 'Million', 'Billion'];
+
+  function chunk(n) {
+    let s = '';
+    if (n >= 100) { s += ones[Math.floor(n / 100)] + ' Hundred '; n %= 100; }
+    if (n >= 20) { s += tens[Math.floor(n / 10)] + ' '; n %= 10; }
+    if (n > 0) s += ones[n] + ' ';
+    return s.trim();
+  }
+
+  if (num === 0) return 'Zero';
+  let parts = [];
+  let i = 0;
+  while (num > 0) {
+    const c = num % 1000;
+    if (c > 0) parts.unshift((chunk(c) + ' ' + scales[i]).trim());
+    num = Math.floor(num / 1000);
+    i++;
+  }
+  return parts.join(' ').trim();
+}
+
+/* deterministic decorative barcode (SVG) based on a string */
+function barcodeSVG(text) {
+  let bars = '';
+  let x = 2;
+  const str = String(text || 'CODE');
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    const w = (c % 3) + 1;
+    const black = c % 2 === 0;
+    if (black) bars += `<rect x="${x}" y="0" width="${w}" height="36" fill="#1f2530"/>`;
+    x += w + 1;
+  }
+  return `<svg viewBox="0 0 ${x + 2} 36" width="100%" height="34" preserveAspectRatio="none">${bars}</svg>`;
+}
+
+function showToast(msg) {
+  const toastEl = document.getElementById('appToast');
+  document.getElementById('appToastBody').textContent = msg;
+  bootstrap.Toast.getOrCreateInstance(toastEl, { delay: 2200 }).show();
+}
+
+/* Triggers a short device vibration for tactile "scan confirmed" feedback.
+   This works independently of the device's ringer/silent mode (silent mode
+   only mutes audio output, not the Vibration API), so it's used as the
+   reliable fallback/companion to the scan beep below. Not supported on iOS
+   Safari (no Vibration API there) — fails silently in that case. */
+function vibrateDevice(pattern) {
+  try {
+    if (navigator.vibrate) {
+      navigator.vibrate(pattern);
+    } else if (navigator.webkitVibrate) {
+      navigator.webkitVibrate(pattern);
+    } else if (navigator.mozVibrate) {
+      navigator.mozVibrate(pattern);
+    }
+  } catch (e) {
+    console.debug('Vibration not available:', e);
+  }
+}
+
+/* Short synthesized "item added" chime — built with the Web Audio API so no
+   external sound file is needed and it still works offline. Respects the
+   "Play a sound when an item is added" setting. */
+let sharedAudioCtx = null;
+
+/* Creates/resumes the shared audio context. Called directly from the tap
+   that opens the scanner — the earliest possible point in the gesture —
+   because some mobile browsers only allow unlocking audio when the resume
+   call happens as close to the actual tap as possible. */
+function unlockAudioContext() {
+  try {
+    if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
+  } catch (e) {}
+}
+
+function playItemAddedSound() {
+  if (!state.settings.soundEnabled) return;
+  try {
+    if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = sharedAudioCtx;
+    const playTone = () => {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.setValueAtTime(1175, now + 0.09);
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.exponentialRampToValueAtTime(0.18, now + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.24);
+    };
+    if (ctx.state === 'suspended') ctx.resume().then(playTone).catch(() => {});
+    else playTone();
+  } catch (e) {
+    console.warn('Could not play sound', e);
+  }
+}
+
+/* =========================================================
+   CALCULATIONS
+   ========================================================= */
+function computeTotals(cart, overallDiscount, taxPercent, amountReceived) {
+  let subtotal = 0;
+  cart.forEach(item => {
+    const gross = Number(item.qty) * Number(item.price);
+    let disc = 0;
+    if (item.discountType === 'percent') disc = gross * (Number(item.discountValue || 0) / 100);
+    else if (item.discountType === 'fixed') disc = Number(item.discountValue || 0);
+    disc = Math.min(Math.max(disc, 0), gross);
+    item._gross = gross;
+    item._discountAmt = disc;
+    item._lineTotal = gross - disc;
+    subtotal += item._lineTotal;
+  });
+
+  let overallDiscAmt = 0;
+  if (overallDiscount.type === 'percent') overallDiscAmt = subtotal * (Number(overallDiscount.value || 0) / 100);
+  else overallDiscAmt = Number(overallDiscount.value || 0);
+  overallDiscAmt = Math.min(Math.max(overallDiscAmt, 0), subtotal);
+
+  const afterDiscount = subtotal - overallDiscAmt;
+  const taxAmt = afterDiscount * (Number(taxPercent || 0) / 100);
+  const grandTotal = afterDiscount + taxAmt;
+
+  const received = Number(amountReceived || 0);
+  const changeDue = received > 0 ? Math.max(received - grandTotal, 0) : 0;
+  const shortfall = received > 0 ? Math.max(grandTotal - received, 0) : 0;
+
+  return { subtotal, overallDiscAmt, taxAmt, grandTotal, received, changeDue, shortfall };
+}
+
+/* =========================================================
+   SNAPSHOT BUILDING (used for live preview, save, reprint)
+   ========================================================= */
+function buildInvoiceSnapshot(numberOverride) {
+  const cartCopy = state.cart.map(it => ({ ...it }));
+  const totals = computeTotals(cartCopy, state.overallDiscount, state.taxPercent, state.amountReceived);
+  const ts = nowStrings();
+  return {
+    id: numberOverride ? numberOverride : 'draft',
+    number: numberOverride || currentDraftNumber(),
+    dateISO: ts.iso,
+    dateStr: ts.display,
+    customer: state.customer || '',
+    note: state.note || '',
+    status: state.status,
+    items: cartCopy,
+    totals,
+    taxPercent: Number(state.taxPercent || 0),
+    overallDiscount: { ...state.overallDiscount },
+    amountReceived: Number(state.amountReceived || 0),
+    template: state.settings.template,
+    paperSize: state.settings.paperSize,
+    business: {
+      name: state.settings.businessName,
+      address: state.settings.address,
+      phone: state.settings.phone,
+      footerNote: state.note || state.settings.footerNote,
+      currency: state.settings.currency
+    }
+  };
+}
+
+/* =========================================================
+   RENDER: CART TABLE
+   ========================================================= */
+function renderCart() {
+  const body = document.getElementById('cartBody');
+  const emptyMsg = document.getElementById('emptyCartMsg');
+  computeTotals(state.cart, state.overallDiscount, state.taxPercent, state.amountReceived); // refresh computed fields
+
+  if (state.cart.length === 0) {
+    body.innerHTML = '';
+    emptyMsg.classList.remove('d-none');
+  } else {
+    emptyMsg.classList.add('d-none');
+    body.innerHTML = state.cart.map((item, idx) => {
+      return `
+        <tr data-id="${item.id}">
+          <td class="sr-col">${idx + 1}</td>
+          <td>
+            <div>${escapeHtml(item.name)}</div>
+          </td>
+          <td class="text-center">${item.qty}</td>
+          <td class="text-end">${fmt(item.price)}</td>
+          <td class="text-end fw-semibold">${fmt(item._lineTotal)}</td>
+          <td class="text-end">
+            <button class="row-action-btn edit-item-btn" title="Edit" data-id="${item.id}"><i class="bi bi-pencil"></i></button>
+            <button class="row-action-btn danger remove-item-btn" title="Remove" data-id="${item.id}"><i class="bi bi-trash"></i></button>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  const totals = computeTotals(state.cart, state.overallDiscount, state.taxPercent, state.amountReceived);
+  document.getElementById('sumSubtotal').textContent = fmt(totals.subtotal);
+  document.getElementById('sumDiscount').textContent = '-' + fmt(totals.overallDiscAmt);
+  document.getElementById('sumTax').textContent = fmt(totals.taxAmt);
+  document.getElementById('sumTotal').textContent = fmt(totals.grandTotal);
+
+  const changeDisplay = document.getElementById('changeDueDisplay');
+  const changeHint = document.getElementById('changeHint');
+  if (totals.received > 0 && totals.shortfall > 0) {
+    changeDisplay.value = '-' + fmt(totals.shortfall) + ' short';
+    changeDisplay.classList.remove('text-success');
+    changeDisplay.classList.add('text-danger');
+    changeHint.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Amount received is less than the total. Collect the remaining ' + fmt(totals.shortfall) + '.';
+  } else if (totals.received > 0) {
+    changeDisplay.value = fmt(totals.changeDue);
+    changeDisplay.classList.remove('text-danger');
+    changeDisplay.classList.add('text-success');
+    changeHint.innerHTML = '<i class="bi bi-info-circle"></i> Return ' + fmt(totals.changeDue) + ' change to the customer.';
+  } else {
+    changeDisplay.value = fmt(0);
+    changeDisplay.classList.remove('text-success', 'text-danger');
+    changeHint.innerHTML = '<i class="bi bi-info-circle"></i> Enter what the customer physically handed over (e.g. 5000) — the change due is calculated automatically and shown on the receipt.';
+  }
+
+  renderPreview();
+}
+
+/* =========================================================
+   RENDER: RECEIPT TEMPLATES
+   ========================================================= */
+function paperClass(size) {
+  if (size === '58mm') return 'paper-58';
+  if (size === 'a4') return 'paper-a4';
+  return 'paper-80';
+}
+
+function cashRowsHtml(t, currency, fieldClass, labelClass) {
+  if (!(t.received > 0)) return '';
+  let rows = `<div class="${fieldClass}"><span class="${labelClass}">Cash received</span><span>${fmt(t.received)}</span></div>`;
+  if (t.shortfall > 0) {
+    rows += `<div class="${fieldClass}"><span class="${labelClass}">Balance due</span><span class="fw-bold" style="color:var(--danger);">${fmt(t.shortfall)}</span></div>`;
+  } else {
+    rows += `<div class="${fieldClass}"><span class="${labelClass}">Change returned</span><span class="fw-bold" style="color:var(--good);">${fmt(t.changeDue)}</span></div>`;
+  }
+  return rows;
+}
+
+function itemsHtmlModern(items) {
+  if (items.length === 0) return `<div class="rc-item-row"><span class="rc-muted">No items added</span></div>`;
+  return items.map((it, idx) => `
+    <div class="rc-item-row">
+      <div>
+        <div class="rc-item-name"><span class="rc-sr">${idx + 1}.</span>${escapeHtml(it.name)}</div>
+        <div class="rc-item-sub">${it.qty} × ${fmt(it.price)}</div>
+      </div>
+      <div class="fw-semibold">${fmt(it._lineTotal)}</div>
+    </div>
+  `).join('');
+}
+
+function renderModern(inv) {
+  const t = inv.totals;
+  return `
+    <div class="tmpl-modern">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="rc-eyebrow">Sales Receipt</div>
+          <div class="rc-title">${escapeHtml(inv.business.name)}</div>
+        </div>
+        <span class="rc-code-badge">${escapeHtml(inv.number)}</span>
+      </div>
+      <div class="rc-item-sub mb-3">${escapeHtml(inv.business.address || '')} ${inv.business.phone ? '· ' + escapeHtml(inv.business.phone) : ''}</div>
+
+      <div class="rc-meta-row"><span class="lbl"><i class="bi bi-calendar3"></i> Date</span><span>${inv.dateStr}</span></div>
+      <div class="rc-meta-row"><span class="lbl"><i class="bi bi-person"></i> Customer</span><span>${escapeHtml(inv.customer || 'Walk-in customer')}</span></div>
+      <div class="rc-meta-row"><span class="lbl"><i class="bi bi-tag"></i> Status</span>
+        <span class="rc-status-pill ${inv.status === 'paid' ? 'rc-status-paid' : 'rc-status-unpaid'}">${inv.status === 'paid' ? 'PAID' : 'UNPAID'}</span>
+      </div>
+
+      <div class="mt-2">${itemsHtmlModern(inv.items)}</div>
+
+      <div class="rc-meta-row mt-2"><span class="lbl">Subtotal</span><span>${fmt(t.subtotal)}</span></div>
+      ${t.overallDiscAmt > 0 ? `<div class="rc-meta-row"><span class="lbl">Discount</span><span>-${fmt(t.overallDiscAmt)}</span></div>` : ''}
+      ${t.taxAmt > 0 ? `<div class="rc-meta-row"><span class="lbl">Tax (${inv.taxPercent}%)</span><span>${fmt(t.taxAmt)}</span></div>` : ''}
+      <div class="rc-meta-row" style="border-bottom:none;"><span class="lbl fw-bold" style="color:var(--ink);">Total</span><span class="fw-bold fs-5">${fmt(t.grandTotal)}</span></div>
+
+      ${t.received > 0 ? `<div class="rc-cash-box">${cashRowsHtml(t, inv.business.currency, 'rc-meta-row', 'lbl')}</div>` : ''}
+
+      ${inv.business.footerNote ? `<div class="rc-note-box"><i class="bi bi-info-circle"></i> ${escapeHtml(inv.business.footerNote)}</div>` : ''}
+
+      <div class="text-center rc-item-sub">${escapeHtml(inv.number)}</div>
+      ${watermarkHtml()}
+    </div>`;
+}
+
+function itemsHtmlTicket(items) {
+  if (items.length === 0) return `<div class="rc-line"><span class="rc-muted">No items added</span></div>`;
+  return items.map((it, idx) => `
+    <div class="rc-item-block">
+      <div class="rc-item-top"><span><span class="rc-sr">${idx + 1}.</span>${escapeHtml(it.name)}</span><span>${fmt(it._lineTotal)}</span></div>
+      <div class="rc-item-bottom">
+        <span>${it.qty} x ${fmt(it.price)}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderTicket(inv) {
+  const t = inv.totals;
+  return `
+    <div class="tmpl-ticket">
+      <div class="rc-head">${escapeHtml(inv.business.name).toUpperCase()}</div>
+      <div class="rc-sub">${escapeHtml(inv.business.address || '')}${inv.business.phone ? ' · ' + escapeHtml(inv.business.phone) : ''}</div>
+      <div class="rc-dashed mt-2 pt-2">
+        <div class="rc-line"><span>Receipt</span><span>#${escapeHtml(inv.number)}</span></div>
+        <div class="rc-line"><span>Date</span><span>${inv.dateStr}</span></div>
+        <div class="rc-line"><span>Customer</span><span>${escapeHtml(inv.customer || 'Walk-in')}</span></div>
+        <div class="rc-line"><span>Status</span><span>${inv.status === 'paid' ? 'PAID' : 'UNPAID'}</span></div>
+      </div>
+
+      <div class="rc-codebox">${escapeHtml(inv.number)}</div>
+
+      <div class="rc-dashed pt-2">${itemsHtmlTicket(inv.items)}</div>
+
+      <div class="rc-dashed mt-2 pt-2">
+        <div class="rc-line"><span>Subtotal</span><span>${fmt(t.subtotal)}</span></div>
+        ${t.overallDiscAmt > 0 ? `<div class="rc-line"><span>Discount</span><span>-${fmt(t.overallDiscAmt)}</span></div>` : ''}
+        ${t.taxAmt > 0 ? `<div class="rc-line"><span>Tax (${inv.taxPercent}%)</span><span>${fmt(t.taxAmt)}</span></div>` : ''}
+        <div class="rc-line" style="font-weight:700; font-size:.85rem;"><span>TOTAL</span><span>${fmt(t.grandTotal)}</span></div>
+      </div>
+
+      ${t.received > 0 ? `<div class="rc-dashed mt-2 pt-2">${cashRowsHtml(t, inv.business.currency, 'rc-line', '')}</div>` : ''}
+
+      <div class="text-center fw-bold mt-3" style="font-size:.78rem;">THANK YOU FOR YOUR BUSINESS!</div>
+      ${inv.business.footerNote ? `<div class="rc-sub text-center mt-1">${escapeHtml(inv.business.footerNote)}</div>` : ''}
+
+      <div class="text-center rc-sub">${escapeHtml(inv.number)}</div>
+      ${watermarkHtml()}
+    </div>`;
+}
+
+function itemsHtmlSlip(items) {
+  if (items.length === 0) return `<div class="rc-item-row"><span class="rc-muted">No items added</span></div>`;
+  return items.map((it, idx) => `
+    <div class="rc-item-row">
+      <span><span class="rc-sr">${idx + 1}.</span>${escapeHtml(it.name)} <span class="rc-muted">(${it.qty} × ${fmt(it.price)})</span></span>
+      <span class="fw-semibold">${fmt(it._lineTotal)}</span>
+    </div>
+  `).join('');
+}
+
+function renderSlip(inv) {
+  const t = inv.totals;
+  return `
+    <div class="tmpl-slip">
+      <div class="rc-bar d-flex justify-content-between align-items-start">
+        <div>
+          <div class="rc-biz">${escapeHtml(inv.business.name)}</div>
+          <div class="rc-sub">Sales Receipt</div>
+        </div>
+        <div class="text-end">
+          <div class="rc-sub">${inv.dateStr}</div>
+        </div>
+      </div>
+      <div class="rc-body">
+        <div class="rc-field-row"><span class="lbl">Billed to</span><span>${escapeHtml(inv.customer || 'Walk-in customer')}</span></div>
+        <div class="rc-field-row"><span class="lbl">Invoice #</span><span>${escapeHtml(inv.number)}</span></div>
+        <div class="rc-field-row"><span class="lbl">Status</span>
+          <span class="rc-status-pill ${inv.status === 'paid' ? 'rc-status-paid' : 'rc-status-unpaid'}">${inv.status === 'paid' ? 'Paid' : 'Unpaid'}</span>
+        </div>
+
+        <div class="mt-2">${itemsHtmlSlip(inv.items)}</div>
+
+        <div class="rc-field-row mt-2"><span class="lbl">Subtotal</span><span>${fmt(t.subtotal)}</span></div>
+        ${t.overallDiscAmt > 0 ? `<div class="rc-field-row"><span class="lbl">Discount</span><span>-${fmt(t.overallDiscAmt)}</span></div>` : ''}
+        ${t.taxAmt > 0 ? `<div class="rc-field-row"><span class="lbl">Tax (${inv.taxPercent}%)</span><span>${fmt(t.taxAmt)}</span></div>` : ''}
+
+        <div class="rc-amount-box">
+          <div class="rc-sub">Amount ${inv.status === 'paid' ? 'Paid' : 'Due'}</div>
+          <div class="amt">${fmt(t.grandTotal)}</div>
+          <div class="words">${numberToWords(t.grandTotal)} ${inv.business.currency === 'Rs' ? 'Rupees' : ''} Only</div>
+        </div>
+
+        ${t.received > 0 ? `<div class="mt-2">${cashRowsHtml(t, inv.business.currency, 'rc-field-row', 'lbl')}</div>` : ''}
+
+        <div class="rc-footer-note">
+          ${inv.business.footerNote ? escapeHtml(inv.business.footerNote) + '<br>' : ''}
+          ${escapeHtml(inv.business.phone || '')}
+        </div>
+        ${watermarkHtml()}
+      </div>
+    </div>`;
+}
+
+function renderPreview() {
+  const inv = state.viewingHistoryId
+    ? state.history.find(h => h.id === state.viewingHistoryId)
+    : buildInvoiceSnapshot();
+
+  if (!inv) return;
+
+  const container = document.getElementById('receiptPreview');
+  container.className = 'receipt-paper ' + paperClass(inv.paperSize) + ' tmpl-' + inv.template;
+
+  if (inv.template === 'ticket') container.innerHTML = renderTicket(inv);
+  else if (inv.template === 'slip') container.innerHTML = renderSlip(inv);
+  else container.innerHTML = renderModern(inv);
+
+  document.getElementById('viewingBanner').classList.toggle('d-none', !state.viewingHistoryId);
+
+  syncPrintRoot(container);
+}
+
+/* Keep the hidden #printRoot container mirroring the current receipt at all
+   times, so printing works correctly no matter how it's triggered (our
+   in-app button, the browser's own Print/Share menu, Ctrl+P, etc.) — see
+   the #printRoot rules in the <style> block for why this fixes the
+   "prints the whole app instead of just the receipt" bug. */
+function syncPrintRoot(receiptEl) {
+  const printRoot = document.getElementById('printRoot');
+  if (printRoot) printRoot.innerHTML = receiptEl.outerHTML;
+}
+
+/* =========================================================
+   CATALOG (autocomplete + barcode lookup)
+
+   All lookups below match on NORMALIZED name/barcode (see normalizeName /
+   normalizeBarcode above) rather than the raw stored text. This is what
+   makes rescanning the same physical barcode — or re-typing the same
+   product name with different spacing/case — recognize the existing
+   catalog entry instead of quietly creating a duplicate with what looks
+   like a "new" barcode.
+   ========================================================= */
+function renderCatalogDatalist() {
+  const dl = document.getElementById('catalogList');
+  dl.innerHTML = state.catalog.map(p => `<option value="${escapeHtml(p.name)}">`).join('');
+}
+
+function findCatalogByBarcode(code) {
+  const key = normalizeBarcode(code);
+  if (!key) return null;
+  return state.catalog.find(p => p.barcode && normalizeBarcode(p.barcode) === key) || null;
+}
+
+function findCatalogByName(name) {
+  const key = normalizeName(name);
+  if (!key) return null;
+  return state.catalog.find(p => normalizeName(p.name) === key) || null;
+}
+
+function findCatalogById(id) {
+  return state.catalog.find(p => p.id === id) || null;
+}
+
+/* Creates or updates a catalog entry from a sale-side action (Add Item form
+   or the scanner). Matches first by barcode (if given), otherwise by name,
+   so scanning a code for an existing product (added manually) links it
+   instead of creating a duplicate entry. Stock/lowStockThreshold fields are
+   left untouched here — those are only ever set from the Inventory screen
+   or a CSV import, never implicitly reset by a sale. */
+async function upsertCatalog(name, price, barcode) {
+  let existing = null;
+  if (barcode) existing = findCatalogByBarcode(barcode);
+  if (!existing) existing = findCatalogByName(name);
+
+  if (existing) {
+    existing.price = price;
+    // Keep the name as typed most recently, but never lose a real barcode
+    // that's already linked just because this particular sale left the
+    // barcode field blank.
+    existing.name = name;
+    if (barcode) existing.barcode = barcode;
+  } else {
+    state.catalog.unshift({ id: uid(), name, price, barcode: barcode || '', stock: null, lowStockThreshold: null });
+  }
+  state.catalog = state.catalog.slice(0, 1000);
+  await storageSet('catalog', state.catalog);
+  renderCatalogDatalist();
+  renderInventoryTable();
+}
+
+/* Full create/update used by the Inventory "Add product" form, editing an
+   existing row, and CSV import. Matching priority: explicit id (editing) >
+   barcode > name — so importing a CSV that references a product you already
+   track updates it in place instead of duplicating it. Fields left
+   undefined in `fields` are not overwritten, so a partial update (e.g. just
+   correcting the price) never wipes out barcode/stock that's already set. */
+async function upsertCatalogFull(fields) {
+  let existing = null;
+  if (fields.id) existing = findCatalogById(fields.id);
+  if (!existing && fields.barcode) existing = findCatalogByBarcode(fields.barcode);
+  if (!existing && fields.name) existing = findCatalogByName(fields.name);
+
+  if (existing) {
+    if (fields.name !== undefined) existing.name = fields.name;
+    if (fields.price !== undefined) existing.price = fields.price;
+    if (fields.barcode !== undefined && fields.barcode !== '') existing.barcode = fields.barcode;
+    if (fields.stock !== undefined) existing.stock = fields.stock;
+    if (fields.lowStockThreshold !== undefined) existing.lowStockThreshold = fields.lowStockThreshold;
+  } else {
+    existing = {
+      id: uid(),
+      name: fields.name || 'Unnamed product',
+      price: fields.price != null ? fields.price : 0,
+      barcode: fields.barcode || '',
+      stock: fields.stock != null ? fields.stock : null,
+      lowStockThreshold: fields.lowStockThreshold != null ? fields.lowStockThreshold : null
+    };
+    state.catalog.unshift(existing);
+  }
+  state.catalog = state.catalog.slice(0, 1000);
+  await storageSet('catalog', state.catalog);
+  renderCatalogDatalist();
+  renderInventoryTable();
+  return existing;
+}
+
+/* Deduct sold quantities from tracked stock. Called only when a sale is
+   actually persisted as a NEW history entry (not when an unchanged draft is
+   re-saved), so stock is never double-deducted. Items without a matching
+   catalog entry, or catalog entries with stock left untracked (null), are
+   skipped — this is an opt-in feature per product. */
+async function deductStockForSale(items) {
+  let changed = false;
+  items.forEach(it => {
+    let product = null;
+    if (it.barcode) product = findCatalogByBarcode(it.barcode);
+    if (!product) product = findCatalogByName(it.name);
+    if (product && product.stock != null) {
+      product.stock = Math.max(0, Number(product.stock) - Number(it.qty || 0));
+      changed = true;
+    }
+  });
+  if (changed) {
+    await storageSet('catalog', state.catalog);
+    renderInventoryTable();
+  }
+}
+
+function lowStockThresholdFor(product) {
+  return product.lowStockThreshold != null ? Number(product.lowStockThreshold) : Number(state.settings.lowStockThreshold || 5);
+}
+
+function computeLowStockItems() {
+  return state.catalog.filter(p => p.stock != null && p.stock <= lowStockThresholdFor(p));
+}
+
+function updateInventoryBadge() {
+  const low = computeLowStockItems();
+  const badge = document.getElementById('invBadge');
+  if (!badge) return;
+  if (low.length > 0) {
+    badge.textContent = String(low.length);
+    badge.classList.remove('d-none');
+  } else {
+    badge.classList.add('d-none');
+  }
+}
+
+/* =========================================================
+   INVENTORY (full product list, stock, low-stock alerts, CSV import)
+   ========================================================= */
+function stockPillHtml(product) {
+  if (product.stock == null) return `<span class="inv-stock-pill inv-stock-untracked">untracked</span>`;
+  const threshold = lowStockThresholdFor(product);
+  if (product.stock <= 0) return `<span class="inv-stock-pill inv-stock-out">${product.stock} · out of stock</span>`;
+  if (product.stock <= threshold) return `<span class="inv-stock-pill inv-stock-low">${product.stock} · low</span>`;
+  return `<span class="inv-stock-pill inv-stock-ok">${product.stock}</span>`;
+}
+
+function renderInventoryTable() {
+  const body = document.getElementById('invTableBody');
+  const emptyMsg = document.getElementById('invEmptyMsg');
+  const countLabel = document.getElementById('invCountLabel');
+  if (!body) return;
+
+  const query = (document.getElementById('invSearch').value || '').trim().toLowerCase();
+  const rows = state.catalog.filter(p =>
+    !query || p.name.toLowerCase().includes(query) || (p.barcode || '').toLowerCase().includes(query)
+  );
+
+  countLabel.textContent = state.catalog.length + (state.catalog.length === 1 ? ' product' : ' products');
+
+  if (rows.length === 0) {
+    body.innerHTML = '';
+    emptyMsg.classList.remove('d-none');
+  } else {
+    emptyMsg.classList.add('d-none');
+    body.innerHTML = rows.map(p => {
+      const threshold = lowStockThresholdFor(p);
+      let rowClass = '';
+      if (p.stock != null) {
+        if (p.stock <= 0) rowClass = 'inv-row-out';
+        else if (p.stock <= threshold) rowClass = 'inv-row-low';
+      }
+      return `
+        <tr class="${rowClass}" data-id="${p.id}">
+          <td>${escapeHtml(p.name)}</td>
+          <td class="rc-mono small">${escapeHtml(p.barcode || '—')}</td>
+          <td class="text-end">${fmt(p.price)}</td>
+          <td class="text-center">${stockPillHtml(p)}</td>
+          <td class="text-end">
+            <button class="row-action-btn inv-edit-btn" title="Edit" data-id="${p.id}"><i class="bi bi-pencil"></i></button>
+            <button class="row-action-btn danger inv-delete-btn" title="Delete" data-id="${p.id}"><i class="bi bi-trash"></i></button>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  const low = computeLowStockItems();
+  const banner = document.getElementById('invLowBanner');
+  if (low.length > 0) {
+    banner.classList.remove('d-none');
+    document.getElementById('invLowBannerText').textContent =
+      low.length + ' product' + (low.length === 1 ? '' : 's') + ' running low: ' +
+      low.slice(0, 6).map(p => p.name).join(', ') + (low.length > 6 ? '…' : '');
+  } else {
+    banner.classList.add('d-none');
+  }
+
+  updateInventoryBadge();
+}
+
+function showInvAddForm(editProduct) {
+  document.getElementById('invBulkImportBox').classList.add('d-none');
+  const form = document.getElementById('invAddForm');
+  form.classList.remove('d-none');
+  if (editProduct) {
+    document.getElementById('invFormTitle').textContent = 'Edit product';
+    document.getElementById('invEditId').value = editProduct.id;
+    document.getElementById('invName').value = editProduct.name;
+    document.getElementById('invPrice').value = editProduct.price;
+    document.getElementById('invBarcode').value = editProduct.barcode || '';
+    document.getElementById('invStock').value = editProduct.stock != null ? editProduct.stock : '';
+    document.getElementById('invLowThreshold').value = editProduct.lowStockThreshold != null ? editProduct.lowStockThreshold : '';
+  } else {
+    document.getElementById('invFormTitle').textContent = 'Add product';
+    document.getElementById('invEditId').value = '';
+    document.getElementById('invName').value = '';
+    document.getElementById('invPrice').value = '';
+    document.getElementById('invBarcode').value = '';
+    document.getElementById('invStock').value = '';
+    document.getElementById('invLowThreshold').value = '';
+  }
+  document.getElementById('invName').focus();
+}
+
+function hideInvAddForm() {
+  document.getElementById('invAddForm').classList.add('d-none');
+}
+
+/* Accepts lines of `name,price,barcode,stock` (barcode/stock optional).
+   Returns { imported, skipped }. */
+async function importCsvText(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  let imported = 0, skipped = 0;
+  for (const line of lines) {
+    // Skip an obvious header row like "name,price,barcode,stock"
+    if (/^name\s*,\s*price/i.test(line)) continue;
+    const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+    const name = cols[0] || '';
+    const price = parseFloat(cols[1]);
+    const barcode = cols[2] || '';
+    const stockRaw = cols[3];
+    const stock = stockRaw !== undefined && stockRaw !== '' && !isNaN(parseFloat(stockRaw)) ? parseFloat(stockRaw) : null;
+
+    if (!name || isNaN(price) || price < 0) { skipped++; continue; }
+    await upsertCatalogFull({ name, price, barcode, stock });
+    imported++;
+  }
+  return { imported, skipped };
+}
+
+/* Builds a CSV of the FULL inventory (not just the current search filter),
+   in the exact same `name,price,barcode,stock` shape the Bulk Import box
+   accepts — so a file exported here can be re-imported as-is, on this
+   device or a different one. */
+function buildInventoryCsv() {
+  const csvField = v => {
+    const s = String(v == null ? '' : v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const rows = state.catalog.map(p => [
+    csvField(p.name),
+    p.price != null ? p.price : '',
+    csvField(p.barcode || ''),
+    p.stock != null ? p.stock : ''
+  ].join(','));
+  return ['name,price,barcode,stock', ...rows].join('\n');
+}
+
+function downloadTextFile(filename, text, mime) {
+  const blob = new Blob([text], { type: mime || 'text/plain' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function exportInventoryCsv() {
+  if (state.catalog.length === 0) {
+    showToast('No products to export yet.');
+    return;
+  }
+  const csv = buildInventoryCsv();
+  const filename = 'inventory_' + new Date().toISOString().slice(0, 10) + '.csv';
+  downloadTextFile(filename, csv, 'text/csv');
+  showToast(`Exported ${state.catalog.length} product${state.catalog.length === 1 ? '' : 's'} to CSV.`);
+}
+
+function wireInventoryModal() {
+  wireQtyStepper('invStock', 'invStockMinus', 'invStockPlus', 0);
+
+  const modalEl = document.getElementById('inventoryModal');
+  modalEl.addEventListener('show.bs.modal', () => {
+    hideInvAddForm();
+    document.getElementById('invBulkImportBox').classList.add('d-none');
+    renderInventoryTable();
+  });
+
+  document.getElementById('invSearch').addEventListener('input', renderInventoryTable);
+
+  document.getElementById('invShowAddBtn').addEventListener('click', () => showInvAddForm(null));
+  document.getElementById('invCancelAddBtn').addEventListener('click', hideInvAddForm);
+
+  document.getElementById('invExportCsvBtn').addEventListener('click', exportInventoryCsv);
+
+  document.getElementById('invShowImportBtn').addEventListener('click', () => {
+    hideInvAddForm();
+    document.getElementById('invBulkImportBox').classList.remove('d-none');
+  });
+  document.getElementById('invCancelImportBtn').addEventListener('click', () => {
+    document.getElementById('invBulkImportBox').classList.add('d-none');
+  });
+
+  document.getElementById('invAddForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const id = document.getElementById('invEditId').value || null;
+    const name = document.getElementById('invName').value.trim();
+    const price = parseFloat(document.getElementById('invPrice').value);
+    const barcode = document.getElementById('invBarcode').value.trim();
+    const stockVal = document.getElementById('invStock').value;
+    const stock = stockVal === '' ? null : parseFloat(stockVal);
+    const thresholdVal = document.getElementById('invLowThreshold').value;
+    const lowStockThreshold = thresholdVal === '' ? null : parseFloat(thresholdVal);
+
+    if (!name || isNaN(price) || price < 0) {
+      showToast('Enter a valid product name and price.');
+      return;
+    }
+
+    // Guard against creating a duplicate row when editing (id set) but the
+    // typed name/barcode now collides with a *different* existing product.
+    if (!id) {
+      const dupe = (barcode && findCatalogByBarcode(barcode)) || findCatalogByName(name);
+      if (dupe) {
+        await upsertCatalogFull({ id: dupe.id, name, price, barcode, stock, lowStockThreshold });
+        hideInvAddForm();
+        showToast('Matched an existing product — updated it instead of creating a duplicate.');
+        return;
+      }
+    }
+
+    await upsertCatalogFull({ id, name, price, barcode, stock, lowStockThreshold });
+    hideInvAddForm();
+    showToast(id ? 'Product updated.' : 'Product added.');
+  });
+
+  document.getElementById('invTableBody').addEventListener('click', async e => {
+    const editBtn = e.target.closest('.inv-edit-btn');
+    const delBtn = e.target.closest('.inv-delete-btn');
+
+    if (editBtn) {
+      const product = findCatalogById(editBtn.dataset.id);
+      if (product) showInvAddForm(product);
+    }
+    if (delBtn) {
+      const product = findCatalogById(delBtn.dataset.id);
+      if (!product) return;
+      if (!confirm(`Delete "${product.name}" from inventory? This won't affect past invoices.`)) return;
+      state.catalog = state.catalog.filter(p => p.id !== product.id);
+      await storageSet('catalog', state.catalog);
+      renderCatalogDatalist();
+      renderInventoryTable();
+      showToast('Product deleted.');
+    }
+  });
+
+  document.getElementById('invImportBtn').addEventListener('click', async () => {
+    const text = document.getElementById('invCsvText').value;
+    if (!text.trim()) {
+      showToast('Paste CSV text or choose a file first.');
+      return;
+    }
+    const { imported, skipped } = await importCsvText(text);
+    showToast(`Imported ${imported} product${imported === 1 ? '' : 's'}${skipped ? `, skipped ${skipped} invalid row${skipped === 1 ? '' : 's'}` : ''}.`);
+    document.getElementById('invCsvText').value = '';
+    document.getElementById('invBulkImportBox').classList.add('d-none');
+    renderInventoryTable();
+  });
+
+  document.getElementById('invCsvFile').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      document.getElementById('invCsvText').value = String(reader.result || '');
+    };
+    reader.onerror = () => showToast('Could not read that file.');
+    reader.readAsText(file);
+  });
+}
+
+/* =========================================================
+   HISTORY
+   ========================================================= */
+function renderHistory() {
+  const body = document.getElementById('historyBody');
+  const noMsg = document.getElementById('noHistoryMsg');
+  if (state.history.length === 0) {
+    body.innerHTML = '';
+    noMsg.classList.remove('d-none');
+    return;
+  }
+  noMsg.classList.add('d-none');
+  body.innerHTML = state.history.map(inv => `
+    <tr>
+      <td class="rc-mono">${escapeHtml(inv.number)}</td>
+      <td>${inv.dateStr}</td>
+      <td>${escapeHtml(inv.customer || 'Walk-in')}</td>
+      <td class="text-end">${fmt(inv.totals.grandTotal)}</td>
+      <td class="text-end">
+        <button class="btn btn-sm btn-outline-brand view-history-btn" data-id="${inv.id}">View</button>
+        <button class="btn btn-sm btn-outline-danger delete-history-btn" data-id="${inv.id}"><i class="bi bi-trash"></i></button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+/* =========================================================
+   EVENT WIRING
+   ========================================================= */
+function wireAddItemForm() {
+  wireQtyStepper('itemQty', 'itemQtyMinus', 'itemQtyPlus', 1);
+
+  document.getElementById('addItemForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const name = document.getElementById('itemName').value.trim();
+    const qty = parseFloat(document.getElementById('itemQty').value);
+    const price = parseFloat(document.getElementById('itemPrice').value);
+    const barcode = document.getElementById('itemBarcode').value.trim();
+
+    if (!name || !(qty > 0) || isNaN(price) || price < 0) {
+      showToast('Please enter a valid item name, quantity and price.');
+      return;
+    }
+
+    // Per-item discounts have been removed — items always carry zero
+    // item-level discount now. Use "Overall adjustments" below the cart
+    // for a discount across the whole sale instead.
+    state.cart.push({
+      id: editingItemId || uid(),
+      name, qty, price, discountType: 'percent', discountValue: 0, barcode: barcode || ''
+    });
+    editingItemId = null;
+    document.getElementById('addItemBtn').innerHTML = '<i class="bi bi-plus-lg"></i>';
+
+    await upsertCatalog(name, price, barcode);
+    playItemAddedSound();
+
+    e.target.reset();
+    document.getElementById('itemQty').value = 1;
+    document.getElementById('itemName').focus();
+
+    renderCart();
+  });
+
+  document.getElementById('itemName').addEventListener('input', e => {
+    const match = findCatalogByName(e.target.value.trim());
+    if (match) {
+      document.getElementById('itemPrice').value = match.price;
+      document.getElementById('itemBarcode').value = match.barcode || '';
+    }
+  });
+}
+
+function wireCartActions() {
+  document.getElementById('cartBody').addEventListener('click', e => {
+    const editBtn = e.target.closest('.edit-item-btn');
+    const removeBtn = e.target.closest('.remove-item-btn');
+
+    if (removeBtn) {
+      const id = removeBtn.dataset.id;
+      state.cart = state.cart.filter(it => it.id !== id);
+      renderCart();
+    }
+
+    if (editBtn) {
+      const id = editBtn.dataset.id;
+      const item = state.cart.find(it => it.id === id);
+      if (!item) return;
+      document.getElementById('itemName').value = item.name;
+      document.getElementById('itemQty').value = item.qty;
+      document.getElementById('itemPrice').value = item.price;
+      document.getElementById('itemBarcode').value = item.barcode || '';
+      editingItemId = id;
+      document.getElementById('addItemBtn').innerHTML = '<i class="bi bi-check2"></i>';
+      state.cart = state.cart.filter(it => it.id !== id);
+      renderCart();
+      document.getElementById('itemName').focus();
+    }
+  });
+}
+
+function wireSaleDetailInputs() {
+  document.getElementById('customerName').addEventListener('input', e => { state.customer = e.target.value; renderPreview(); });
+  document.getElementById('saleNote').addEventListener('input', e => { state.note = e.target.value; renderPreview(); });
+  document.getElementById('saleStatus').addEventListener('change', e => { state.status = e.target.value; renderPreview(); });
+
+  document.getElementById('overallDiscountValue').addEventListener('input', e => {
+    state.overallDiscount.value = parseFloat(e.target.value) || 0;
+    renderCart();
+  });
+  document.getElementById('overallDiscountType').addEventListener('change', e => {
+    state.overallDiscount.type = e.target.value;
+    renderCart();
+  });
+  document.getElementById('taxPercent').addEventListener('input', e => {
+    state.taxPercent = parseFloat(e.target.value) || 0;
+    renderCart();
+  });
+
+  document.getElementById('amountReceived').addEventListener('input', e => {
+    state.amountReceived = parseFloat(e.target.value) || 0;
+    renderCart();
+  });
+}
+
+function wireTemplateAndPaper() {
+  document.querySelectorAll('.tmpl-tab').forEach(tab => {
+    tab.addEventListener('click', async () => {
+      document.querySelectorAll('.tmpl-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      state.settings.template = tab.dataset.tmpl;
+      await storageSet('settings', state.settings);
+      renderPreview();
+    });
+  });
+
+  document.getElementById('paperSize').addEventListener('change', async e => {
+    state.settings.paperSize = e.target.value;
+    await storageSet('settings', state.settings);
+    renderPreview();
+  });
+}
+
+function wireNewSale() {
+  document.getElementById('newSaleBtn').addEventListener('click', () => {
+    state.cart = [];
+    state.customer = '';
+    state.note = '';
+    state.status = 'paid';
+    state.overallDiscount = { type: 'percent', value: 0 };
+    state.taxPercent = 0;
+    state.amountReceived = 0;
+    state.viewingHistoryId = null;
+    state.currentSavedId = null;
+    state.currentSavedKey = null;
+    document.getElementById('customerName').value = '';
+    document.getElementById('saleNote').value = '';
+    document.getElementById('saleStatus').value = 'paid';
+    document.getElementById('overallDiscountValue').value = 0;
+    document.getElementById('taxPercent').value = 0;
+    document.getElementById('amountReceived').value = '';
+    renderCart();
+    showToast('Started a new sale.');
+  });
+
+  document.getElementById('backToCurrentBtn').addEventListener('click', () => {
+    state.viewingHistoryId = null;
+    renderPreview();
+  });
+}
+
+/* A fingerprint of everything that defines the current draft sale. Used to
+   tell whether the draft has changed since it was last saved to history, so
+   printing/sharing the same unmodified sale twice doesn't create duplicate
+   history entries or double-count it on the dashboard. */
+function snapshotKey() {
+  return JSON.stringify({
+    cart: state.cart, customer: state.customer, note: state.note, status: state.status,
+    overallDiscount: state.overallDiscount, taxPercent: state.taxPercent, amountReceived: state.amountReceived
+  });
+}
+
+/* Save the current draft sale to history — used by the manual "Save invoice
+   to history" button AND automatically whenever the receipt is printed or
+   shared, so nothing has to be saved by hand. If viewing a past receipt from
+   history, it's already saved, so this is a no-op. If nothing has changed
+   since the draft was last saved, the existing history entry is reused
+   instead of creating a duplicate. Returns the saved (or reused) invoice, or
+   null if there was nothing to save. */
+async function persistCurrentInvoice(opts) {
+  opts = opts || {};
+  const silent = !!opts.silent;
+
+  if (state.viewingHistoryId) {
+    return state.history.find(h => h.id === state.viewingHistoryId) || null;
+  }
+  if (state.cart.length === 0) {
+    if (!silent) showToast('Add at least one item before saving.');
+    return null;
+  }
+
+  const key = snapshotKey();
+  if (state.currentSavedId && state.currentSavedKey === key) {
+    const existing = state.history.find(h => h.id === state.currentSavedId);
+    if (existing) {
+      if (!silent) showToast(`Already saved as ${existing.number}`);
+      return existing;
+    }
+  }
+
+  const number = currentDraftNumber();
+  const snapshot = buildInvoiceSnapshot(number);
+  snapshot.id = number;
+  state.history.unshift(snapshot);
+  state.history = state.history.slice(0, 200);
+  await storageSet('history', state.history);
+
+  // Deduct sold quantities from tracked stock — only happens here, right
+  // when a sale is newly recorded to history, so re-printing/re-sharing the
+  // same unmodified sale never deducts twice.
+  await deductStockForSale(snapshot.items);
+
+  state.settings.counter = (state.settings.counter || 1) + 1;
+  await storageSet('settings', state.settings);
+
+  state.currentSavedId = snapshot.id;
+  state.currentSavedKey = key;
+
+  renderHistory();
+  renderDashboard();
+  document.getElementById('nextInvoicePreview').textContent = currentDraftNumber();
+  if (!silent) showToast(`Saved as ${number}`);
+
+  return snapshot;
+}
+
+function wireSaveAndPrint() {
+  document.getElementById('saveInvoiceBtn').addEventListener('click', async () => {
+    await persistCurrentInvoice({ silent: false });
+    renderPreview();
+  });
+
+  document.getElementById('shareImageBtn').addEventListener('click', shareReceiptAsImage);
+
+  /* Covers every way a physical print can be triggered — this button,
+     the browser's own Print menu, or Ctrl+P — so the sale is always
+     recorded to history and the dashboard before the print dialog opens. */
+  window.addEventListener('beforeprint', () => { persistCurrentInvoice({ silent: true }); });
+}
+
+/* Set the physical @page size/margins to match the selected paper before
+   printing, so the browser doesn't default to A4/Letter and leave the
+   receipt stranded in a corner of a much bigger page. */
+function applyPrintPageSize() {
+  let styleTag = document.getElementById('dynamicPrintStyle');
+  if (!styleTag) {
+    styleTag = document.createElement('style');
+    styleTag.id = 'dynamicPrintStyle';
+    document.head.appendChild(styleTag);
+  }
+  let size, margin;
+  if (state.settings.paperSize === '58mm') { size = '58mm auto'; margin = '0mm'; }
+  else if (state.settings.paperSize === 'a4') { size = 'A4'; margin = '10mm'; }
+  else { size = '80mm auto'; margin = '0mm'; } // 80mm thermal roll (default)
+  styleTag.textContent = `@media print { @page { size: ${size}; margin: ${margin}; } }`;
+}
+
+/* Print only the receipt. #printRoot is kept permanently synced with the
+   current receipt (see syncPrintRoot), so all we need to do here is set the
+   correct physical page size and open the print dialog — this also means
+   printing works correctly even if triggered by the browser's own
+   Print/Share menu instead of this button, since the CSS no longer depends
+   on a class being toggled first. */
+function printReceipt() {
+  applyPrintPageSize();
+  window.print();
+}
+
+/* For pocket "cat/panda printer" style mini printers that don't support
+   system Print or ESC/POS Bluetooth at all — render the receipt to a PNG
+   and hand it straight to the device share sheet (where apps like iPrint
+   show up as a share target). Falls back to a plain download if the Web
+   Share API (or file sharing) isn't available on this browser/device. */
+async function shareReceiptAsImage() {
+  if (typeof html2canvas === 'undefined') {
+    showToast('Image export library failed to load — check your internet connection.');
+    return;
+  }
+  const target = document.getElementById('receiptPreview');
+  if (!target || !target.innerHTML.trim()) {
+    showToast('Nothing to share yet — add items or open a saved receipt first.');
+    return;
+  }
+
+  // Auto-save this sale to history before sharing, so it's counted on the dashboard.
+  const saved = await persistCurrentInvoice({ silent: true });
+
+  try {
+    const canvas = await html2canvas(target, { backgroundColor: '#ffffff', scale: 3, useCORS: true });
+    const inv = saved || (state.viewingHistoryId
+      ? state.history.find(h => h.id === state.viewingHistoryId)
+      : buildInvoiceSnapshot());
+    const filename = (inv && inv.number ? inv.number : 'receipt').replace(/[^a-z0-9\-]/gi, '_') + '.png';
+
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('Could not generate image');
+    const file = new File([blob], filename, { type: 'image/png' });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: inv && inv.number ? inv.number : 'Receipt',
+        text: 'Receipt ' + (inv && inv.number ? inv.number : '')
+      });
+      showToast('Receipt shared — pick iPrint or your printer app.');
+    } else {
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = URL.createObjectURL(blob);
+      link.click();
+      URL.revokeObjectURL(link.href);
+      showToast('Sharing isn\'t supported here — image downloaded instead. Open it from your printer\'s app.');
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return; // user cancelled the share sheet
+    console.error(err);
+    showToast('Could not share image: ' + (err.message || 'unknown error'));
+  }
+}
+
+/* =========================================================
+   SALES DASHBOARD (daily / weekly / monthly — from saved history)
+   ========================================================= */
+function startOfDay(d) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
+function startOfWeek(d) {
+  const x = startOfDay(d);
+  const day = x.getDay(); // 0 = Sunday
+  const diff = (day === 0 ? 6 : day - 1); // week starts Monday
+  x.setDate(x.getDate() - diff);
+  return x;
+}
+function startOfMonth(d) { const x = startOfDay(d); x.setDate(1); return x; }
+
+function computeSalesStats() {
+  const now = new Date();
+  const dayStart = startOfDay(now);
+  const weekStart = startOfWeek(now);
+  const monthStart = startOfMonth(now);
+
+  const stats = {
+    daily: { total: 0, count: 0 },
+    weekly: { total: 0, count: 0 },
+    monthly: { total: 0, count: 0 }
+  };
+
+  state.history.forEach(inv => {
+    const d = new Date(inv.dateISO);
+    if (isNaN(d)) return;
+    const amt = (inv.totals && inv.totals.grandTotal) || 0;
+    if (d >= dayStart) { stats.daily.total += amt; stats.daily.count++; }
+    if (d >= weekStart) { stats.weekly.total += amt; stats.weekly.count++; }
+    if (d >= monthStart) { stats.monthly.total += amt; stats.monthly.count++; }
+  });
+
+  return stats;
+}
+
+function renderDashboard() {
+  const stats = computeSalesStats();
+  document.getElementById('dashDailyAmt').textContent = fmt(stats.daily.total);
+  document.getElementById('dashDailyCount').textContent = stats.daily.count + (stats.daily.count === 1 ? ' sale' : ' sales');
+  document.getElementById('dashWeeklyAmt').textContent = fmt(stats.weekly.total);
+  document.getElementById('dashWeeklyCount').textContent = stats.weekly.count + (stats.weekly.count === 1 ? ' sale' : ' sales');
+  document.getElementById('dashMonthlyAmt').textContent = fmt(stats.monthly.total);
+  document.getElementById('dashMonthlyCount').textContent = stats.monthly.count + (stats.monthly.count === 1 ? ' sale' : ' sales');
+}
+
+function applyDashboardVisibility() {
+  const hidden = !!state.settings.dashboardHidden;
+  document.getElementById('dashboardBody').classList.toggle('d-none', hidden);
+  document.getElementById('dashEmptyMsg').classList.toggle('d-none', hidden);
+  document.getElementById('dashToggleLabel').textContent = hidden ? 'Show' : 'Hide';
+  const icon = document.querySelector('#dashToggleBtn i');
+  if (icon) icon.className = hidden ? 'bi bi-eye' : 'bi bi-eye-slash';
+}
+
+function wireDashboardToggle() {
+  document.getElementById('dashToggleBtn').addEventListener('click', async () => {
+    state.settings.dashboardHidden = !state.settings.dashboardHidden;
+    await storageSet('settings', state.settings);
+    applyDashboardVisibility();
+  });
+}
+
+function wireHistoryModal() {
+  document.getElementById('historyBody').addEventListener('click', async e => {
+    const viewBtn = e.target.closest('.view-history-btn');
+    const delBtn = e.target.closest('.delete-history-btn');
+
+    if (viewBtn) {
+      state.viewingHistoryId = viewBtn.dataset.id;
+      renderPreview();
+      bootstrap.Modal.getInstance(document.getElementById('historyModal'))?.hide();
+    }
+    if (delBtn) {
+      state.history = state.history.filter(h => h.id !== delBtn.dataset.id);
+      await storageSet('history', state.history);
+      renderHistory();
+      renderDashboard();
+    }
+  });
+}
+
+function wireSettingsForm() {
+  document.getElementById('settingsForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    state.settings.businessName = document.getElementById('setBizName').value.trim() || state.settings.businessName;
+    state.settings.address = document.getElementById('setAddress').value.trim();
+    state.settings.phone = document.getElementById('setPhone').value.trim();
+    state.settings.footerNote = document.getElementById('setFooter').value.trim();
+    state.settings.prefix = document.getElementById('setPrefix').value.trim() || 'INV';
+    state.settings.currency = document.getElementById('setCurrency').value.trim() || 'Rs';
+    state.settings.btChunkSize = parseInt(document.getElementById('setBtChunkSize').value, 10) || 20;
+    state.settings.lowStockThreshold = parseFloat(document.getElementById('setLowStockThreshold').value) || 0;
+    state.settings.soundEnabled = document.getElementById('setSoundEnabled').checked;
+    await storageSet('settings', state.settings);
+    document.getElementById('nextInvoicePreview').textContent = currentDraftNumber();
+    renderPreview();
+    renderInventoryTable();
+    showToast('Settings saved.');
+  });
+
+  document.getElementById('resetCounterBtn').addEventListener('click', async () => {
+    state.settings.counter = 1;
+    await storageSet('settings', state.settings);
+    document.getElementById('nextInvoicePreview').textContent = currentDraftNumber();
+    showToast('Invoice counter reset.');
+  });
+}
+
+function fillSettingsForm() {
+  document.getElementById('setBizName').value = state.settings.businessName;
+  document.getElementById('setAddress').value = state.settings.address;
+  document.getElementById('setPhone').value = state.settings.phone;
+  document.getElementById('setFooter').value = state.settings.footerNote;
+  document.getElementById('setPrefix').value = state.settings.prefix;
+  document.getElementById('setCurrency').value = state.settings.currency;
+  document.getElementById('setBtChunkSize').value = String(state.settings.btChunkSize || 20);
+  document.getElementById('setLowStockThreshold').value = state.settings.lowStockThreshold != null ? state.settings.lowStockThreshold : 5;
+  document.getElementById('setSoundEnabled').checked = state.settings.soundEnabled !== false;
+  document.getElementById('nextInvoicePreview').textContent = currentDraftNumber();
+
+  document.getElementById('paperSize').value = state.settings.paperSize;
+  document.querySelectorAll('.tmpl-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tmpl === state.settings.template);
+  });
+}
+
+/* =========================================================
+   BARCODE / QR SCANNER (continuous scan-to-cart)
+
+   Engine: native browser BarcodeDetector API first (built into Chrome/
+   Edge on Android and many desktops — no external script to download, so
+   it can't fail from a blocked CDN), falling back to ZXing (loaded from a
+   CDN, with several mirror URLs tried in turn) only on browsers without
+   BarcodeDetector (e.g. iOS Safari).
+
+   Two accuracy safeguards sit between the raw camera decode and this
+   app's normal handling, since a single blurry/rushed frame can decode to
+   a plausible-looking but WRONG code:
+     1. EAN/UPC codes carry a check digit — verified, and failures are
+        silently dropped instead of accepted.
+     2. The SAME code must be read on two consecutive frames before it's
+        accepted, instead of trusting any single frame.
+   Only once a code clears both does it reach handleScannedCode() below,
+   which is unchanged from before: every recognized code is looked up in
+   the product catalog by its linked barcode (via findCatalogByBarcode,
+   matching on a NORMALIZED code — see normalizeBarcode above):
+     - Known code  -> instantly added to the cart (or its qty bumped by 1
+                       if that exact barcode is already in the cart), and
+                       scanning KEEPS RUNNING for the next product.
+     - Unknown code -> scanning pauses just long enough for a Name/Price/
+                       Qty mini form, which adds the product to INVENTORY
+                       (never the cart/receipt), then scanning resumes.
+   A short per-code cooldown still prevents the same barcode from being
+   added twice if it stays in frame for a moment.
+
+   Feedback on every confirmed scan is now BOTH sound (scanBeep, subject to
+   the "Play a sound" setting) AND a device vibration (vibrateDevice, always
+   on — the Vibration API isn't affected by the ringer/silent switch, so it
+   still gives the shopkeeper a physical confirmation even with the phone
+   muted).
+   ========================================================= */
+const NATIVE_ALL_FORMATS = ['qr_code','ean_13','ean_8','code_128','code_39','code_93','upc_a','upc_e','itf','codabar','data_matrix','pdf_417','aztec'];
+const ZXING_SOURCES = [
+  'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js',
+  'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js',
+  'https://cdn.jsdelivr.net/npm/@zxing/library@latest/umd/index.min.js'
+];
+
+let scanEngine = null;      // 'native' | 'zxing'
+let engineReadyPromise = null;
+let detector = null;        // native BarcodeDetector instance
+let codeReader = null;      // ZXing BrowserMultiFormatReader instance
+let scanRafId = null;
+let currentScanStream = null;
+let scanSessionCount = 0;
+let scanCooldown = new Map(); // code -> timestamp of last accepted scan
+const SCAN_COOLDOWN_MS = 1000;
+let scannerPausedForUnknown = false;
+let pendingUnknownCode = null;
+let torchOn = false;
+let torchSupported = false;
+
+function prependScanLog(text, qtyLabel) {
+  const log = document.getElementById('scanLog');
+  const row = document.createElement('div');
+  row.className = 'scan-log-item';
+  row.innerHTML = `<span><i class="bi bi-check-circle text-success"></i> ${escapeHtml(text)}</span>${qtyLabel ? `<span class="qty-badge">${escapeHtml(qtyLabel)}</span>` : ''}`;
+  log.prepend(row);
+  while (log.children.length > 12) log.removeChild(log.lastChild);
+}
+
+function flashScanner() {
+  const flash = document.getElementById('scanFlash');
+  flash.classList.add('active');
+  setTimeout(() => flash.classList.remove('active'), 150);
+}
+
+/* Beep played on a confirmed scan — same square-wave tone as the provided
+   advanced scanner. Respects the existing "Play a sound when an item is
+   added" setting, same as every other in-app sound.
+   IMPORTANT: reuses the shared AudioContext (see playItemAddedSound above),
+   and — unlike before — actually WAITS for resume() to finish before
+   playing the tone when the context was suspended. Playing immediately
+   after calling resume() (without waiting on the returned promise) meant
+   the oscillator was often started while the context was still suspended
+   and produced no audible sound at all, which is why the scan beep looked
+   "wired up" in the code but stayed silent on many phones. */
+function scanBeep() {
+  if (!state.settings.soundEnabled) return;
+  try {
+    if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = sharedAudioCtx;
+    const playTone = () => {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(1500, now);
+      gain.gain.setValueAtTime(0.15, now);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.09);
+    };
+    if (ctx.state === 'suspended') ctx.resume().then(playTone).catch(() => {});
+    else playTone();
+  } catch (e) {
+    console.warn('Could not play scan beep', e);
+  }
+}
+
+async function addScannedProductToCart(product) {
+  // If this exact barcode is already the most recent matching line in the
+  // cart, bump its quantity instead of adding a duplicate row.
+  const key = normalizeBarcode(product.barcode);
+  const existingLine = state.cart.find(it => it.barcode && normalizeBarcode(it.barcode) === key);
+  if (existingLine) {
+    existingLine.qty = Number(existingLine.qty) + 1;
+    prependScanLog(product.name, 'x' + existingLine.qty);
+  } else {
+    state.cart.push({
+      id: uid(),
+      name: product.name,
+      qty: 1,
+      price: product.price,
+      discountType: 'percent',
+      discountValue: 0,
+      barcode: product.barcode
+    });
+    prependScanLog(product.name, 'x1');
+  }
+  scanSessionCount++;
+  document.getElementById('scanCountLabel').textContent = scanSessionCount + ' items added this session';
+  scanBeep();
+  vibrateDevice([50, 30, 50]); // double-tap vibration pattern for successful add
+  renderCart();
+}
+
+function handleScannedCode(code) {
+  if (scannerPausedForUnknown) return; // ignore new scans while the unknown-item form is open
+
+  const normKey = normalizeBarcode(code);
+  const last = scanCooldown.get(normKey) || 0;
+  if (Date.now() - last < SCAN_COOLDOWN_MS) return; // debounce repeated frames of the same code
+  scanCooldown.set(normKey, Date.now());
+
+  flashScanner();
+  vibrateDevice([30]); // quick tap when barcode is first detected
+
+  // Look up using the SAME real barcode string every time this physical
+  // code is scanned — findCatalogByBarcode compares on the normalized
+  // form, so the existing product is found instead of a fresh "unknown
+  // code" prompt being shown for what is actually the same item.
+  const product = findCatalogByBarcode(code);
+  if (product) {
+    // Known product — add it to the current sale, exactly as before.
+    addScannedProductToCart(product);
+  } else {
+    // New code — pause and ask for Name, Price, and Qty. Saving this adds
+    // the product to INVENTORY (stock), never to the cart/receipt.
+    // Scanning resumes automatically after save/skip.
+    scannerPausedForUnknown = true;
+    pendingUnknownCode = code;
+    document.getElementById('scanUnknownCode').textContent = code;
+    document.getElementById('scanUnknownName').value = '';
+    document.getElementById('scanUnknownPrice').value = '';
+    document.getElementById('scanUnknownQty').value = '';
+    document.getElementById('scanUnknownBox').classList.remove('d-none');
+    document.getElementById('scanUnknownName').focus();
+  }
+}
+
+function wireUnknownScanForm() {
+  wireQtyStepper('scanUnknownQty', 'scanUnknownQtyMinus', 'scanUnknownQtyPlus', 0);
+
+  document.getElementById('scanUnknownSaveBtn').addEventListener('click', async () => {
+    const name = document.getElementById('scanUnknownName').value.trim();
+    const price = parseFloat(document.getElementById('scanUnknownPrice').value);
+    const qtyVal = document.getElementById('scanUnknownQty').value;
+    const qty = qtyVal === '' ? null : Math.max(0, parseFloat(qtyVal) || 0);
+    if (!name || isNaN(price) || price < 0) {
+      showToast('Enter a product name and a valid price.');
+      return;
+    }
+    // Store the exact code as scanned — this is the item's REAL barcode,
+    // never a generated/placeholder value. The Qty entered here only ever
+    // sets this product's INVENTORY stock — it never touches the current
+    // sale/cart/receipt.
+    const saved = await upsertCatalogFull({ name, price, barcode: pendingUnknownCode, stock: qty });
+    scanSessionCount++;
+    document.getElementById('scanCountLabel').textContent = scanSessionCount + ' items added this session';
+    prependScanLog(saved.name, saved.stock != null ? 'stock: ' + saved.stock : 'added');
+    scanBeep();
+    vibrateDevice([50, 30, 50]); // double-tap vibration for unknown code saved
+    closeUnknownScanBox();
+  });
+
+  document.getElementById('scanUnknownSkipBtn').addEventListener('click', () => {
+    closeUnknownScanBox();
+  });
+}
+
+function closeUnknownScanBox() {
+  document.getElementById('scanUnknownBox').classList.add('d-none');
+  scannerPausedForUnknown = false;
+  pendingUnknownCode = null;
+}
+
+/* ---------- Accuracy safeguards (checksum + confirm-read) ---------- */
+function checksumValid(digits) {
+  if (!/^\d+$/.test(digits)) return true; // non-numeric formats (QR, Code128, etc.) skip this check
+  const len = digits.length;
+  if (len === 13 || len === 12) {
+    const body = len === 12 ? '0' + digits : digits; // UPC-A shares EAN-13's check algorithm
+    const arr = body.split('').map(Number);
+    let sum = 0;
+    for (let i = 0; i < 12; i++) sum += arr[i] * (i % 2 === 0 ? 1 : 3);
+    const check = (10 - (sum % 10)) % 10;
+    return check === arr[12];
+  }
+  if (len === 8) {
+    const arr = digits.split('').map(Number);
+    let sum = 0;
+    for (let i = 0; i < 7; i++) sum += arr[i] * (i % 2 === 0 ? 3 : 1);
+    const check = (10 - (sum % 10)) % 10;
+    return check === arr[7];
+  }
+  return true; // other numeric lengths: no standard check digit to validate
+}
+
+let pendingCode = null, pendingCount = 0;
+const CONFIRM_READS = 2;
+
+function processCandidate(text) {
+  if (!checksumValid(text)) {
+    // Failed checksum — almost certainly a misread. Reset and wait for a clean read.
+    pendingCode = null; pendingCount = 0;
+    return;
+  }
+  if (text === pendingCode) {
+    pendingCount++;
+  } else {
+    pendingCode = text;
+    pendingCount = 1;
+  }
+  if (pendingCount >= CONFIRM_READS) {
+    handleScannedCode(text.trim());
+    pendingCode = null; pendingCount = 0;
+  }
+}
+
+/* ---------- Native BarcodeDetector engine ---------- */
+async function nativeScanLoop() {
+  if (scannerPausedForUnknown) { scanRafId = requestAnimationFrame(nativeScanLoop); return; }
+  const video = document.getElementById('scannerVideoEl');
+  try {
+    if (video.readyState >= 2) {
+      const codes = await detector.detect(video);
+      if (codes.length > 0) processCandidate(codes[0].rawValue);
+    }
+  } catch (e) { /* skip this frame */ }
+  scanRafId = requestAnimationFrame(nativeScanLoop);
+}
+
+async function tryInitNative() {
+  if (!('BarcodeDetector' in window)) return false;
+  try {
+    const supported = await BarcodeDetector.getSupportedFormats();
+    const wanted = NATIVE_ALL_FORMATS.filter(f => supported.includes(f));
+    detector = new BarcodeDetector({ formats: wanted.length ? wanted : supported });
+    return true;
+  } catch (e) { return false; }
+}
+
+/* ---------- ZXing fallback engine (CDN-based) ---------- */
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Failed: ' + src));
+    document.head.appendChild(s);
+  });
+}
+
+async function tryInitZXing() {
+  for (const src of ZXING_SOURCES) {
+    try {
+      await loadScript(src);
+      if (typeof ZXing !== 'undefined') return true;
+    } catch (e) {}
+  }
+  return false;
+}
+
+/* Picks the scan engine once (cached across scanner opens) — native first,
+   ZXing as a CDN-loaded fallback for browsers without BarcodeDetector. */
+function ensureEngine() {
+  if (!engineReadyPromise) {
+    engineReadyPromise = (async () => {
+      if (await tryInitNative()) { scanEngine = 'native'; return true; }
+      if (await tryInitZXing()) { scanEngine = 'zxing'; return true; }
+      scanEngine = null;
+      return false;
+    })();
+  }
+  return engineReadyPromise;
+}
+
+/* ---------- Torch (flashlight) ---------- */
+function getActiveScanTrack() {
+  const track = currentScanStream?.getVideoTracks?.()[0];
+  return track || null;
+}
+
+async function detectTorchSupport() {
+  const btn = document.getElementById('torchToggleBtn');
+  if (!btn) return;
+  try {
+    const track = getActiveScanTrack();
+    if (!track) {
+      torchSupported = false;
+      btn.classList.add('d-none');
+      return;
+    }
+    // Try to detect torch support using getCapabilities
+    if (track.getCapabilities) {
+      const capabilities = track.getCapabilities();
+      torchSupported = !!(capabilities && capabilities.torch);
+      if (torchSupported) {
+        btn.classList.remove('d-none');
+      } else {
+        btn.classList.add('d-none');
+      }
+    } else {
+      // Fallback: if getCapabilities is not available, show the button anyway
+      // so users on devices that might support torch can still try it
+      torchSupported = false; // conservative assumption
+      btn.classList.remove('d-none'); // but show it as a fallback
+    }
+  } catch (e) {
+    console.warn('Could not detect torch support', e);
+    // On error, show button as fallback
+    torchSupported = false;
+    btn.classList.remove('d-none');
+  }
+}
+
+async function toggleTorch() {
+  const track = getActiveScanTrack();
+  if (!track || !torchSupported) return;
+  try {
+    torchOn = !torchOn;
+    await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+    const btn = document.getElementById('torchToggleBtn');
+    btn.classList.toggle('active', torchOn);
+    const icon = btn.querySelector('i');
+    if (icon) icon.className = torchOn ? 'bi bi-flashlight-fill' : 'bi bi-flashlight';
+  } catch (e) {
+    console.warn('Could not toggle torch', e);
+    torchOn = !torchOn; // revert
+    showToast('Could not toggle flashlight on this device.');
+  }
+}
+
+function wireTorchToggle() {
+  document.getElementById('torchToggleBtn').addEventListener('click', toggleTorch);
+}
+
+/* ---------- Start / stop ---------- */
+async function startScanner() {
+  scanSessionCount = 0;
+  scanCooldown.clear();
+  pendingCode = null; pendingCount = 0;
+  torchOn = false;
+  torchSupported = false;
+  document.getElementById('scanLog').innerHTML = '';
+  document.getElementById('scanCountLabel').textContent = '0 items added this session';
+  const torchBtn = document.getElementById('torchToggleBtn');
+  torchBtn.classList.add('d-none');
+  torchBtn.classList.remove('active');
+  const torchIcon = torchBtn.querySelector('i');
+  if (torchIcon) torchIcon.className = 'bi bi-flashlight';
+  closeUnknownScanBox();
+
+  // Unlock the shared audio context again here as a second attempt (the
+  // first happens immediately on the button tap, see openScannerBtn above).
+  unlockAudioContext();
+
+  const ok = await ensureEngine();
+  if (!ok) {
+    showToast('No scanning engine could be loaded (unsupported browser and CDN fallback blocked). Check your internet connection.');
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: 'environment',
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    });
+    currentScanStream = stream;
+    const video = document.getElementById('scannerVideoEl');
+    video.srcObject = stream;
+    await video.play();
+    detectTorchSupport();
+
+    if (scanEngine === 'native') {
+      await tryInitNative(); // rebuild detector fresh for this session
+      scanRafId = requestAnimationFrame(nativeScanLoop);
+    } else if (scanEngine === 'zxing') {
+      const hints = new Map();
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      codeReader = new ZXing.BrowserMultiFormatReader(hints, 60);
+      codeReader.decodeFromVideoElement(video, (result) => {
+        if (result) processCandidate(result.getText());
+      });
+    }
+  } catch (err) {
+    console.error(err);
+    showToast('Could not access camera. Check camera permission for this site.');
+  }
+}
+
+function stopScanner() {
+  if (scanRafId) { cancelAnimationFrame(scanRafId); scanRafId = null; }
+  if (codeReader) { try { codeReader.reset(); } catch (e) {} codeReader = null; }
+  if (currentScanStream) { currentScanStream.getTracks().forEach(t => t.stop()); currentScanStream = null; }
+  const video = document.getElementById('scannerVideoEl');
+  if (video) video.srcObject = null;
+  pendingCode = null; pendingCount = 0;
+  torchOn = false;
+  torchSupported = false;
+  closeUnknownScanBox();
+}
+
+function wireScannerModal() {
+  const modalEl = document.getElementById('scannerModal');
+  modalEl.addEventListener('shown.bs.modal', startScanner);
+  modalEl.addEventListener('hidden.bs.modal', stopScanner);
+  wireUnknownScanForm();
+  wireTorchToggle();
+}
+
+/* =========================================================
+   BLUETOOTH PRINTING (Web Bluetooth + ESC/POS)
+
+   Mini/generic thermal printers (like the cheap ones sold on Daraz)
+   are usually built around an HM-10/HC-08 style serial module. Two
+   things commonly break printing on these:
+     1. The default BLE ATT MTU on many phones/printers is only
+        20-23 bytes, so writing large chunks (e.g. 150 bytes) either
+        silently truncates or throws — the old code used 150 byte
+        chunks, which is too big for most of these printers.
+     2. Sending an unsupported command (like the paper "cut" command
+        on printers with no cutter) in the same byte stream as the
+        receipt text can abort the whole write.
+   Fixes below: much smaller default chunk size (configurable in
+   Settings), the "cut" command is now optional and sent as its own
+   isolated write that can fail without affecting the receipt text,
+   and more known service UUIDs are scanned for a writable characteristic.
+
+   The persistent "Printer not connected" pill has been removed from the
+   navbar (it was just noise for the vast majority of users who never pair
+   a Bluetooth printer) — the pill now only appears once a printer is
+   actually connected, as a small confirmation.
+   ========================================================= */
+const KNOWN_PRINTER_SERVICES = [
+  '000018f0-0000-1000-8000-00805f9b34fb', // common generic ESC/POS BLE printer service
+  '49535343-fe7d-4ae5-8fa9-9fafd205e455', // ISSC/Microchip transparent UART (common in cheap printers)
+  '0000ff00-0000-1000-8000-00805f9b34fb',
+  '0000ffe0-0000-1000-8000-00805f9b34fb', // HM-10/HM-18/HC-08 style serial module — very common in Daraz mini printers
+  '0000fee7-0000-1000-8000-00805f9b34fb',
+  'e7810a71-73ae-499d-8c15-faa9aef0c3f2'  // seen on some BLE thermal printer boards
+];
+
+function setBtStatus(connected, label) {
+  const pill = document.getElementById('btStatusPill');
+  pill.classList.toggle('connected', connected);
+  // Only show the pill once a printer is actually connected — no more
+  // permanent "Printer not connected" clutter in the navbar.
+  pill.classList.toggle('d-none', !connected);
+  document.getElementById('btStatusText').textContent = label;
+  document.getElementById('printBtBtn').disabled = !connected;
+}
+
+async function connectBluetoothPrinter() {
+  if (!navigator.bluetooth) {
+    showToast('Web Bluetooth is not supported on this browser/device.');
+    return;
+  }
+  try {
+    btDevice = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: KNOWN_PRINTER_SERVICES
+    });
+    const server = await btDevice.gatt.connect();
+
+    let foundChar = null;
+    for (const svcUuid of KNOWN_PRINTER_SERVICES) {
+      try {
+        const service = await server.getPrimaryService(svcUuid);
+        const chars = await service.getCharacteristics();
+        foundChar = chars.find(c => c.properties.write || c.properties.writeWithoutResponse) || null;
+        if (foundChar) break;
+      } catch (err) { /* this service isn't present on this device, try next */ }
+    }
+
+    // Fallback: some mini printers expose their write characteristic under a
+    // service UUID we don't have listed. Try walking every primary service.
+    if (!foundChar) {
+      try {
+        const services = await server.getPrimaryServices();
+        for (const service of services) {
+          try {
+            const chars = await service.getCharacteristics();
+            foundChar = chars.find(c => c.properties.write || c.properties.writeWithoutResponse) || null;
+            if (foundChar) break;
+          } catch (err) { /* skip unreadable service */ }
+        }
+      } catch (err) { /* getPrimaryServices not permitted without matching optionalServices */ }
+    }
+
+    if (!foundChar) {
+      showToast('Connected, but no writable print service was found on this device.');
+      setBtStatus(false, 'Unsupported printer profile');
+      return;
+    }
+
+    btCharacteristic = foundChar;
+    setBtStatus(true, 'Connected: ' + (btDevice.name || 'printer'));
+    showToast('Printer connected.');
+  } catch (err) {
+    console.error(err);
+    setBtStatus(false, 'Printer not connected');
+  }
+}
+
+function center(str, width) {
+  str = String(str || '');
+  if (str.length >= width) return str.slice(0, width);
+  const pad = width - str.length;
+  const left = Math.floor(pad / 2);
+  return ' '.repeat(left) + str + ' '.repeat(pad - left);
+}
+
+function padLine(left, right, width) {
+  left = String(left); right = String(right);
+  const space = Math.max(1, width - left.length - right.length);
+  return left + ' '.repeat(space) + right;
+}
+
+function buildReceiptText(inv) {
+  const width = inv.paperSize === '58mm' ? 32 : 42;
+  const t = inv.totals;
+  let lines = [];
+  lines.push(center(inv.business.name.toUpperCase(), width));
+  if (inv.business.address) lines.push(center(inv.business.address, width));
+  if (inv.business.phone) lines.push(center(inv.business.phone, width));
+  lines.push('-'.repeat(width));
+  lines.push(`Invoice: ${inv.number}`);
+  lines.push(`Date: ${inv.dateStr}`);
+  lines.push(`Customer: ${inv.customer || 'Walk-in'}`);
+  lines.push('-'.repeat(width));
+  inv.items.forEach((it, idx) => {
+    lines.push(`${idx + 1}. ${it.name}`);
+    lines.push(padLine(`${it.qty} x ${fmt(it.price)}`, fmt(it._lineTotal), width));
+    if (it._discountAmt > 0) lines.push(padLine('  discount', '-' + fmt(it._discountAmt), width));
+  });
+  lines.push('-'.repeat(width));
+  lines.push(padLine('Subtotal', fmt(t.subtotal), width));
+  if (t.overallDiscAmt > 0) lines.push(padLine('Discount', '-' + fmt(t.overallDiscAmt), width));
+  if (t.taxAmt > 0) lines.push(padLine(`Tax (${inv.taxPercent}%)`, fmt(t.taxAmt), width));
+  lines.push(padLine('TOTAL', fmt(t.grandTotal), width));
+  if (t.received > 0) {
+    lines.push('-'.repeat(width));
+    lines.push(padLine('Cash received', fmt(t.received), width));
+    if (t.shortfall > 0) lines.push(padLine('Balance due', fmt(t.shortfall), width));
+    else lines.push(padLine('Change returned', fmt(t.changeDue), width));
+  }
+  lines.push('-'.repeat(width));
+  if (inv.business.footerNote) lines.push(center(inv.business.footerNote, width));
+  lines.push(center('Thank you!', width));
+  lines.push('-'.repeat(width));
+  APP_WATERMARK_TEXT.split(' | ').forEach(part => lines.push(center(part, width)));
+  return lines.join('\n') + '\n\n\n';
+}
+
+function concatBytes(arrays) {
+  const total = arrays.reduce((sum, a) => sum + a.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  arrays.forEach(a => { out.set(a, offset); offset += a.length; });
+  return out;
+}
+
+function buildEscPosBytes(inv) {
+  const ESC = 0x1B;
+  const encoder = new TextEncoder();
+  const init = new Uint8Array([ESC, 0x40]);          // ESC @  - initialize
+  const alignCenter = new Uint8Array([ESC, 0x61, 1]);
+  const feed = new Uint8Array([0x0A, 0x0A, 0x0A]);
+
+  const text = encoder.encode(buildReceiptText(inv));
+  return {
+    header: init,
+    body: concatBytes([alignCenter, text, feed])
+  };
+}
+
+/* Write bytes to the characteristic in small, MTU-safe chunks with a short
+   delay between each — this is the key fix for mini printers that were
+   dropping/garbling data with the old 150-byte chunk size. */
+async function writeBytesChunked(bytes, chunkSize) {
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.slice(i, i + chunkSize);
+    if (btCharacteristic.properties.writeWithoutResponse) {
+      await btCharacteristic.writeValueWithoutResponse(chunk);
+    } else {
+      await btCharacteristic.writeValue(chunk);
+    }
+    await new Promise(r => setTimeout(r, 30));
+  }
+}
+
+async function printViaBluetooth() {
+  if (!btCharacteristic) {
+    showToast('Connect a Bluetooth printer first.');
+    return;
+  }
+  // Auto-save this sale to history before printing, so it's counted on the dashboard.
+  const saved = await persistCurrentInvoice({ silent: true });
+  const inv = saved || (state.viewingHistoryId
+    ? state.history.find(h => h.id === state.viewingHistoryId)
+    : buildInvoiceSnapshot());
+
+  const chunkSize = state.settings.btChunkSize || 20;
+  const { header, body } = buildEscPosBytes(inv);
+
+  try {
+    // Initialize command sent alone first — if the printer rejects it,
+    // we still fall through and try the receipt body.
+    try { await writeBytesChunked(header, chunkSize); } catch (err) { console.warn('Init command not accepted, continuing anyway.', err); }
+
+    await writeBytesChunked(body, chunkSize);
+
+    // Paper cut is sent last, in its own try/catch, since many mini
+    // printers (no cutter) don't support it and would otherwise abort
+    // the whole print job if sent inline with the receipt text.
+    try {
+      const cut = new Uint8Array([0x1D, 0x56, 0x00]); // GS V 0
+      await writeBytesChunked(cut, chunkSize);
+    } catch (err) { console.warn('Cut command not supported on this printer — ignored.', err); }
+
+    showToast('Sent to Bluetooth printer.');
+  } catch (err) {
+    console.error(err);
+    showToast('Could not print: ' + (err.message || 'printer error') + '. Try a smaller chunk size in Settings.');
+  }
+}
+
+function wireBluetooth() {
+  document.getElementById('connectBtBtn').addEventListener('click', connectBluetoothPrinter);
+  document.getElementById('printBtBtn').addEventListener('click', printViaBluetooth);
+}
+
+/* =========================================================
+   INIT
+   ========================================================= */
+async function init() {
+  await loadAll();
+  document.getElementById('overallDiscountValue').value = state.overallDiscount.value;
+  document.getElementById('taxPercent').value = state.taxPercent;
+  document.getElementById('amountReceived').value = state.amountReceived || '';
+
+  fillSettingsForm();
+  renderCatalogDatalist();
+  renderHistory();
+  renderDashboard();
+  applyDashboardVisibility();
+  renderInventoryTable();
+  renderCart(); // also triggers renderPreview()
+
+  wireAddItemForm();
+  wireCartActions();
+  wireSaleDetailInputs();
+  wireTemplateAndPaper();
+  wireNewSale();
+  wireSaveAndPrint();
+  wireHistoryModal();
+  wireSettingsForm();
+  wireBluetooth();
+  wireDashboardToggle();
+  wireScannerModal();
+  wireInventoryModal();
+  document.getElementById('openScannerBtn').addEventListener('click', unlockAudioContext);
+
+  // Keep daily/weekly/monthly totals current even if the app is left open
+  // across a midnight/week/month rollover without a new sale being saved.
+  setInterval(renderDashboard, 60000);
+
+  if (!navigator.bluetooth) {
+    document.getElementById('connectBtBtn').disabled = true;
+    document.getElementById('connectBtBtn').title = 'Web Bluetooth not supported on this browser/device';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', init);
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js');
+}
+</script>
+</body>
+</html>
