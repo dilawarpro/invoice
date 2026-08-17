@@ -584,7 +584,19 @@
         </div>
       </div>
     </div>
-
+   <div class="builder-card">
+        <h6><i class="bi bi-cash-coin"></i> Cash received &amp; change</h6>
+        <div class="row g-2 align-items-end">
+          <div class="col-6">
+            <label class="form-label">Amount received from customer</label>
+            <input type="number" id="amountReceived" class="form-control" placeholder="e.g. 5000" min="0" step="0.01">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Change to return</label>
+            <input type="text" id="changeDueDisplay" class="form-control fw-bold" value="Rs0.00" readonly tabindex="-1">
+          </div>
+        </div>
+      </div>
   </div>
 
       <div class="builder-card">
@@ -617,19 +629,7 @@
         </div>
       </div>
 
-      <div class="builder-card">
-        <h6><i class="bi bi-cash-coin"></i> Cash received &amp; change</h6>
-        <div class="row g-2 align-items-end">
-          <div class="col-6">
-            <label class="form-label">Amount received from customer</label>
-            <input type="number" id="amountReceived" class="form-control" placeholder="e.g. 5000" min="0" step="0.01">
-          </div>
-          <div class="col-6">
-            <label class="form-label">Change to return</label>
-            <input type="text" id="changeDueDisplay" class="form-control fw-bold" value="Rs0.00" readonly tabindex="-1">
-          </div>
-        </div>
-      </div>
+
 
     </div>
 
