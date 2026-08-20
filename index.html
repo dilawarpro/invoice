@@ -914,6 +914,62 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
+  <script>
+(function() {
+  function showAccessDenied() {
+    const overlay = document.createElement('div');
+    overlay.id = 'access-denied-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.95);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 999999;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 1rem;
+    `;
+
+    const whatsappNumber = '923314041010';
+    const whatsappMessage = encodeURIComponent('Hi, I need access — this app is showing Access Denied.');
+
+    overlay.innerHTML = `
+      <h1 style="font-size: 2rem; margin-bottom: 1rem; color: #ff4444;">Access Denied by Developer</h1>
+      <p style="font-size: 1.1rem; color: #ccc; margin-bottom: 1.5rem;">Please contact the developer for more details.</p>
+      <a href="https://wa.me/${whatsappNumber}?text=${whatsappMessage}" target="_blank" rel="noopener noreferrer"
+         style="
+           background: #25D366;
+           color: #fff;
+           padding: 0.8rem 1.6rem;
+           border-radius: 8px;
+           text-decoration: none;
+           font-weight: bold;
+           font-size: 1rem;
+           box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+         ">
+        Contact Developer
+      </a>
+    `;
+
+    document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') e.preventDefault();
+    });
+    document.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+    });
+  }
+
+  showAccessDenied();
+})();
+  </script>
 <!-- Preventing code js started -->
 <script>
   // Disable right-click context menu
